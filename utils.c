@@ -4,10 +4,15 @@ static PyObject* mod_opt = NULL;
 static PyObject* fn_initial_mcs = NULL;
 static PyObject* fn_run_with_throttle = NULL;
 
-void init() {
+void init_python() {
+    Py_Initialize();
     mod_opt = PyImport_Import( PyString_FromString((char *)"optimize") );
     fn_initial_mcs = PyObject_GetAttrString(mod_opt, (char *)"initial_mcs");
     fn_run_with_throttle = PyObject_GetAttrString(mod_opt, (char *)"run_with_throttle");
+}
+
+void fini_python() {
+    Py_Finalize();
 }
 
 void initial_mcs(double *dst) {

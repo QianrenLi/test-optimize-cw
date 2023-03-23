@@ -29,6 +29,8 @@ void gradient_search() {
     double x[num] = {0}, x_tmp[num] = {0}, x_his[num] = {0};
     double qos, qos_tmp;
 
+    init_python();
+
     initial_mcs(x);
 
     counter = 0;
@@ -44,6 +46,8 @@ void gradient_search() {
         _delta_x = alpha * h_K * (qos_tmp - qos) / _h_fd;
         vec_scalar_inc( x, x, -_delta_x );
     }
+
+    fini_python();
 }
 
 
