@@ -305,7 +305,7 @@ def cal_step_size(*args):
     target_value = 1000
     if algorithm_type == "one_dimentional_search":
         history_stepsize = args[2]
-        maximum_value = 0
+        rtt_value = 0
         # compute the maximum rtt of the graph
         for device_name, links in graph.graph.items():
             for link_name, streams in links.items():
@@ -314,7 +314,8 @@ def cal_step_size(*args):
                     try:
                         target_value = graph.info_graph[device_name][link_name][stream_name]["target_value"]
                         if graph.info_graph[device_name][link_name][stream_name]["active"] == True:
-                            if maximum_value * 1e3 > target_value:
+                            rtt_value = graph.graph[device_name][link_name][stream_name]["rtt"]
+                            if rtt_value * 1e3 > target_value:
                                 return min(history_stepsize, -history_stepsize/2)
                     except:
                         continue
