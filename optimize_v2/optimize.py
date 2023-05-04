@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from transmission_graph import Graph
 from tap import Connector
 from tap_pipe import ipc_socket
@@ -10,6 +11,13 @@ import argparse
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
+##=======================================================================##
+import ctypes
+NATIVE_MOD = ctypes.CDLL('liboptimize.so')
+def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
+    return (arr_type * len(arr))(*arr)
+##=======================================================================##
+
 DURATION = 10
 rx_DURATION = 10
 
@@ -20,7 +28,7 @@ control_times = 9 / control_period
 is_control = threading.Event()
 is_collect = threading.Event()
 is_draw = threading.Event()
-is_writting = threading.Lock()
+is_writing = threading.Lock()
 is_stop = False
 return_num = threading.Semaphore(0)
 
@@ -77,13 +85,13 @@ def get_scenario_test():
     graph.ADD_STREAM(link1, port_number=list(range(5202, 5205)),
                      file_name="file_75MB.npy", duration=[3, 10], thru=0)
     graph.ADD_STREAM(link1, port_number=6201, file_name="proj_6.25MB.npy", duration=[
-                     0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=96, target_value=18)
+                     0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=96, target_rtt=18)
 
     # graph.ADD_STREAM(link2, port_number=6202, file_name="voice_0.05MB.npy", duration=[
     #                  0, 10], thru=name_to_thru("voice_0.05MB.npy"))
 
     graph.ADD_STREAM(link3, port_number=6203, file_name="voice_0.05MB.npy", duration=[
-                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=96, target_value=40)
+                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=96, target_rtt=40)
 
     graph.associate_ip('PC', 'lo', '127.0.0.1')
     graph.associate_ip('phone', 'lo', '127.0.0.1')
@@ -102,13 +110,13 @@ def get_scenario_1_graph():
     graph.ADD_STREAM(link1, port_number=list(range(5202, 5205)),
                      file_name="file_75MB.npy", duration=[0, 10], thru=0)
     graph.ADD_STREAM(link1, port_number=6201, file_name="proj_6.25MB.npy", duration=[
-                     0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=96, target_value=18)
+                     0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=96, target_rtt=18)
 
     graph.ADD_STREAM(link2, port_number=6202, file_name="voice_0.05MB.npy", duration=[
                      0, 10], thru=name_to_thru("voice_0.05MB.npy"))
 
     graph.ADD_STREAM(link3, port_number=6203, file_name="voice_0.05MB.npy", duration=[
-                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=96, target_value=40)
+                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=96, target_rtt=40)
     return graph
 
 
@@ -127,20 +135,20 @@ def get_scenario_2_graph():
     graph.ADD_STREAM(link1, port_number=list(range(5201, 5205)),
                      file_name="file_75MB.npy", duration=[0, 10], thru=0, tos=32)
     graph.ADD_STREAM(link2, port_number=6201, file_name="voice_0.05MB.npy", duration=[
-                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_value=40)
+                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=40)
 
     graph.ADD_STREAM(link3, port_number=6202, file_name="voice_0.05MB.npy", duration=[
-                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_value=40)
+                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=40)
 
     graph.ADD_STREAM(link4, port_number=6203, file_name="kb_0.125MB.npy", duration=[
-                     0, 10], thru=name_to_thru("kb_0.125MB.npy"), tos=128, target_value=40)
+                     0, 10], thru=name_to_thru("kb_0.125MB.npy"), tos=128, target_rtt=40)
 
     graph.ADD_STREAM(link5, port_number=list(range(5206, 5210)),
                      file_name="file_75MB.npy", duration=[0, 10], thru=0, tos=32)
     graph.ADD_STREAM(link5, port_number=6204, file_name="kb_0.125MB.npy", duration=[
-                     0, 10], thru=name_to_thru("kb_0.125MB.npy"), tos=128, target_value=40)
+                     0, 10], thru=name_to_thru("kb_0.125MB.npy"), tos=128, target_rtt=40)
     graph.ADD_STREAM(link5, port_number=6204, file_name="proj_6.25MB.npy", duration=[
-                     0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_value=20)
+                     0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=20)
     return graph
 
 
@@ -160,23 +168,23 @@ def get_scenario_3_graph():
     graph.ADD_STREAM(link1, port_number=list(range(5201, 5205)),
                      file_name="file_75MB.npy", duration=[0, 10], thru=0, tos=32)
     graph.ADD_STREAM(link1, port_number=6201, file_name="proj_6.25MB.npy", duration=[
-                     0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_value=18)
+                     0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=18)
 
     graph.ADD_STREAM(link2, port_number=6202, file_name="voice_0.05MB.npy", duration=[
-                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_value=40)
+                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=40)
 
     graph.ADD_STREAM(link3, port_number=6203, file_name="voice_0.05MB.npy", duration=[
-                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_value=40)
+                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=40)
 
     graph.ADD_STREAM(link5, port_number=6204, file_name="voice_0.05MB.npy", duration=[
-                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_value=25)
+                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=25)
     graph.ADD_STREAM(link5, port_number=6205, file_name="proj_6.25MB.npy", duration=[
-                     0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_value=20)
+                     0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=20)
 
     graph.ADD_STREAM(link6, port_number=6206, file_name="voice_0.05MB.npy", duration=[
-                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_value=25)
+                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=25)
     graph.ADD_STREAM(link6, port_number=6207, file_name="proj_6.25MB.npy", duration=[
-                     0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_value=20)
+                     0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=20)
     return graph
 
 
@@ -187,7 +195,7 @@ def _ip_extract(keyword, graph):
         if keyword is not None:
             conn.batch(device_name, 'read_ip_addr', {'keyword': keyword})
         else:
-            conn.batch(device_name, 'read_ip_addr', {"keyword": "p2p\|wlan"})
+            conn.batch(device_name, 'read_ip_addr', {"keyword": "p2p\\|wlan"})
     outputs = conn.executor.wait(1).fetch().apply()
     results = [o['ip_addr'] for o in outputs]
     for r, c in zip(results, graph.graph.keys()):
@@ -248,15 +256,15 @@ def update_fig(fig, axs, data_graph):
             for link_name, streams in links.items():
                 for stream_name, stream in streams.items():
                     c = next(colors_iter)
-                    if len(stream["indexs"]) > start_point:
+                    if len(stream["indexes"]) > start_point:
                         _line, = axs[_idx].plot(
-                            range(len(stream["indexs"])), color=c)
-                        _line.set_xdata(stream["indexs"][start_point:])
+                            range(len(stream["indexes"])), color=c)
+                        _line.set_xdata(stream["indexes"][start_point:])
                         _line.set_ydata(stream[idx_to_key[_idx]][start_point:])
                         x_axs[0] = min(x_axs[0], min(
-                            stream["indexs"][start_point:]))
+                            stream["indexes"][start_point:]))
                         x_axs[1] = max(x_axs[1], max(
-                            stream["indexs"][start_point:]))
+                            stream["indexes"][start_point:]))
                         y_axs[0] = min(y_axs[0], min(
                             stream[idx_to_key[_idx]][start_point:]))
                         y_axs[1] = max(y_axs[1], max(
@@ -283,13 +291,13 @@ def extract_data_from_graph(graph, data_graph, index):
                 # update stream
                 if stream_name not in data_graph[device_name][link_name].keys():
                     data_graph[device_name][link_name][stream_name] = {
-                        "indexs": [], "rtts": [], "thus": []}
+                        "indexes": [], "rtts": [], "thus": []}
                 # append rtt and throughput
                 if graph.info_graph[device_name][link_name][stream_name]["active"] == True:
                     try:
                         data_graph[device_name][link_name][stream_name]["rtts"].append(
                             stream["rtt"] * 1000)
-                        data_graph[device_name][link_name][stream_name]["indexs"].append(
+                        data_graph[device_name][link_name][stream_name]["indexes"].append(
                             index)
                         data_graph[device_name][link_name][stream_name]["thus"].append(
                             stream["throughput"])
@@ -298,29 +306,39 @@ def extract_data_from_graph(graph, data_graph, index):
     pass
 
 
-def cal_step_size(*args):
-    algorithm_type = args[0]
-    graph = args[1]
+def update_step_size_and_throttle(algorithm_type, graph, **kwargs):
     # get target value from info graph
-    target_value = 1000
-    if algorithm_type == "one_dimentional_search":
-        history_stepsize = args[2]
+    target_rtt = 1000
+    if algorithm_type == "one_dimensional_search":
+        # history_step_size = kwargs['history_step_size']
         rtt_value = 0
+
+        observed_rtt_list = list()
+        target_rtt_list = list()
+
         # compute the maximum rtt of the graph
         for device_name, links in graph.graph.items():
             for link_name, streams in links.items():
                 for stream_name, stream in streams.items():
                     # comparing requirements, skip file
                     try:
-                        target_value = graph.info_graph[device_name][link_name][stream_name]["target_value"]
+                        target_rtt = graph.info_graph[device_name][link_name][stream_name]["target_rtt"]
                         if graph.info_graph[device_name][link_name][stream_name]["active"] == True:
                             rtt_value = graph.graph[device_name][link_name][stream_name]["rtt"]
-                            if rtt_value * 1e3 > target_value:
-                                return min(history_stepsize, -history_stepsize/2)
+                            observed_rtt_list.append( rtt_value*1E3 )
+                            target_rtt_list.append( target_rtt )
+                            # if rtt_value * 1e3 > target_rtt:
+                            #     return min(history_step_size, -history_step_size/2)
                     except:
                         continue
-        return max(history_stepsize, -history_stepsize/2)
-    return 0.1
+        
+        observed_rtt_list = _list_to_c_array( observed_rtt_list )
+        target_rtt_list   = _list_to_c_array( target_rtt_list )
+        this_step_size = NATIVE_MOD.next_step_size(observed_rtt_list, target_rtt_list)
+        this_throttle  = NATIVE_MOD.next_throttle_fraction()
+        return (this_step_size,this_throttle)
+        # return max(history_step_size, -history_step_size/2)
+    return (0.1,0.1)
 
 
 def graph_plot():
@@ -367,7 +385,7 @@ def _send_data(sock):
             continue
             # break
         link_return = json.loads(str(_buffer.decode()))
-        with is_writting:
+        with is_writing:
             system_return.update({sock.link_name: link_return["body"]})
             # print("release return_num")
             return_num.release()
@@ -390,8 +408,6 @@ def _send_data(sock):
 def control_thread(graph, time_limit, period):
     # start control and collect data
     global is_stop, system_return, throttle, data_graph
-    last_throttle = 0.1
-    step_size = 0.1
     control_times = 0
     time.sleep(2)
     while control_times < time_limit:
@@ -411,11 +427,13 @@ def control_thread(graph, time_limit, period):
         # update data graph
         extract_data_from_graph(graph, data_graph, control_times)
         is_draw.set()
-        step_size = cal_step_size("one_dimentional_search", graph, step_size)
-        # update throttle
-        last_throttle, port_throttle = graph.update_throttle(
-            last_throttle, step_size)
 
+        ##=======================================================================##
+        (_step_size, this_throttle) = update_step_size_and_throttle("one_dimensional_search", graph)
+        # update throttle
+        _last_throttle, port_throttle = graph.update_throttle(this_throttle)
+        ##=======================================================================##
+        
         print(port_throttle)
         throttle.update(port_throttle)
         is_control.set()
@@ -601,7 +619,7 @@ def transmission_thread(graph):
 def main(args):
     graph = get_graph(args.scenario)
     if args.scenario > 0:
-        _ip_extract("wlan\|p2p\|wlp", graph)
+        _ip_extract("wlan\\|p2p\\|wlp", graph)
         setup_ip(graph)
     add_ipc_port(graph)
     graph.show()

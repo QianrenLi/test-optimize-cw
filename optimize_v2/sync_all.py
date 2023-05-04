@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import json
 from tap import Connector
-import time
 
 SYNC_CODE = lambda client, codebase: [client.sync_code(b) for b in codebase]
 names = Connector().list_all()

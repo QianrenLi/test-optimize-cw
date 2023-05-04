@@ -1,9 +1,7 @@
+#!/usr/bin/env python3
 import socket
-import sys
-import time
 import argparse
 import json
-
 
 class ipc_socket():
     sock = None
