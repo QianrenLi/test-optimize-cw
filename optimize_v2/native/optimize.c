@@ -7,7 +7,7 @@
 static float step_size = 0.1;
 static float throttle_fraction = 0.1;
 
-float next_step_size(float *observed_rtt_list, float *target_rtt_list)
+float next_step_size(float const *observed_rtt_list, float const *target_rtt_list)
 {
     int i;
     int length;
@@ -45,7 +45,7 @@ float next_throttle_fraction()
     return throttle_fraction;
 }
 
-void update_throttle(float throttle, float *sorted_mcs, float *sorted_thru, float *out_sorted_throttle)
+void update_throttle(float throttle, float const *sorted_mcs, float const *sorted_thru, float *const out_sorted_throttle)
 {
     int i;
     int length, _length, __length;
