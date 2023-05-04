@@ -108,12 +108,12 @@ class Graph:
 
     # core function
     @staticmethod
-    def _update_throttle(sorted_mcs, sorted_thru, allocated_times):
+    def update_throttle(sorted_mcs, sorted_thru, allocated_times):
         # calculate the throughput/MCS (without file) of each link
-        link_fraction = [sorted_thru[i]/sorted_mcs[i] for i in range(len(sorted_mcs))]
+        link_fraction = sum( [sorted_thru[i]/sorted_mcs[i] for i in range(len(sorted_mcs))] )
         # calculate the normalized throughput
-        normalized_thru = sum(link_fraction) + allocated_times
-        return [normalized_thru * sorted_mcs[i] for i in range(len(sorted_mcs))]
+        normalized_thru = ( link_fraction + allocated_times ) / len(sorted_mcs);
+        return [normalized_thru * sorted_mcs[i] - sorted_thru[i] for i in range(len(sorted_mcs))]
 
     def _link_to_port_throttle(self, link_throttle):
         port_throttle = {}
@@ -141,8 +141,11 @@ class Graph:
         ##
         sorted_mcs = [mcs[key] for key in throttle]
         sorted_thru = [thru[key] for key in throttle]
-        sorted_throttle = self._update_throttle(sorted_mcs, sorted_thru, fraction)
+        # sorted_throttle = self.update_throttle(sorted_mcs, sorted_thru, fraction)
+        out_sorted_throttle = _list_to_c_array( [0.0]*len(sorted_mcs) )
+        NATIVE_MOD.update_throttle(fraction, sorted_mcs, sorted_thru, out_sorted_throttle);
         for i, link_name in enumerate(throttle.keys()):
-            throttle.update({link_name: sorted_throttle[i]})
+            throttle.update({link_name: out_sorted_throttle[i]})
+        ##
         port_throttle = self._link_to_port_throttle(throttle)
         return fraction, port_throttle

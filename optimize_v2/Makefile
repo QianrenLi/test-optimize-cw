@@ -1,4 +1,4 @@
-CFLAGS = -O3 -Wall -Wall -Wextra -pedantic -fPIC
+CFLAGS = -O3 -Wall -Wextra -pedantic -fPIC
 TARGET = liboptimize.so
 
 all:

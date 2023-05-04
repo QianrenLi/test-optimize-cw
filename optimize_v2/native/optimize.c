@@ -43,23 +43,28 @@ float next_throttle_fraction()
     return throttle_fraction;
 }
 
-float *_update_throttle(float *sorted_mcs, float *sorted_thru, float throttle)
+float *update_throttle(float throttle, float *sorted_mcs, float *sorted_thru, float *out_sorted_throttle)
 {
     int i;
-    int length;
+    int length, _length, __length;
+    float link_fraction, normalized_thru;
 
-    float link_fraction = 0;
     length = (int)(sizeof(sorted_mcs) / sizeof(float *));
+    _length = (int)(sizeof(sorted_thru) / sizeof(float *));
+    __length = (int)(sizeof(out_sorted_throttle) / sizeof(float *));
+    assert(length == _length);
+    assert(length == __length);
+
+    link_fraction = 0;
     for (i = 0; i < length; i++)
     {
         link_fraction += sorted_thru[i] / sorted_mcs[i];
     }
-    link_fraction += throttle;
+    normalized_thru = (link_fraction + throttle) / length;
 
-    float sorted_throttle[length];
     for (i = 0; i < length; i++)
     {
-        sorted_throttle[i] = link_fraction * sorted_thru[i];
+        out_sorted_throttle[i] = normalized_thru * sorted_mcs[i] - sorted_thru[i];
     }
-    return sorted_throttle;
+    return out_sorted_throttle;
 }
