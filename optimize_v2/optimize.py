@@ -334,7 +334,7 @@ def update_throttle_fraction(algorithm_type, graph, **kwargs):
         
         observed_rtt_list = _list_to_c_array( observed_rtt_list )
         target_rtt_list   = _list_to_c_array( target_rtt_list )
-        this_throttle = NATIVE_MOD.next_step_size(observed_rtt_list, target_rtt_list)
+        this_throttle = NATIVE_MOD.next_throttle_fraction(observed_rtt_list, target_rtt_list)
         return this_throttle
         # return max(history_step_size, -history_step_size/2)
     return 0.1
