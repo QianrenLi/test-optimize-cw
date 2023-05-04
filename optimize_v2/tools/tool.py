@@ -31,7 +31,7 @@ if len(sys.argv) not in [4, 5, 10]:
     print('Usage: python3 tool.py <key> <num> or python3 tool.py <key> <idx> <value>.')
     exit()
 
-path = 'stream-replay/data/%s' % sys.argv[1]
+path = '../stream-replay/data/%s' % sys.argv[1]
 
 if len(sys.argv) == 4:
     key = sys.argv[2]
