@@ -13,7 +13,7 @@ import matplotlib.colors as mcolors
 
 ##=======================================================================##
 import ctypes
-NATIVE_MOD = ctypes.CDLL('liboptimize.so')
+NATIVE_MOD = ctypes.CDLL('./liboptimize.so')
 def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
     return (arr_type * len(arr))(*arr)
 ##=======================================================================##

@@ -4,7 +4,7 @@ import json
 
 ##=======================================================================##
 import ctypes
-NATIVE_MOD = ctypes.CDLL('liboptimize.so')
+NATIVE_MOD = ctypes.CDLL('./liboptimize.so')
 def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
     return (arr_type * len(arr))(*arr)
 ##=======================================================================##
@@ -139,8 +139,8 @@ class Graph:
         # add last throttle value together
         thru, throttle, mcs = self.graph_to_control_coefficient()
         ##
-        sorted_mcs = [mcs[key] for key in throttle]
-        sorted_thru = [thru[key] for key in throttle]
+        sorted_mcs = _list_to_c_array( [mcs[key] for key in throttle] )
+        sorted_thru = _list_to_c_array( [thru[key] for key in throttle] )
         # sorted_throttle = self.update_throttle(sorted_mcs, sorted_thru, fraction)
         out_sorted_throttle = _list_to_c_array( [0.0]*len(sorted_mcs) )
         NATIVE_MOD.update_throttle(fraction, sorted_mcs, sorted_thru, out_sorted_throttle);

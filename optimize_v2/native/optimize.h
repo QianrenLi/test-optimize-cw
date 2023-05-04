@@ -3,6 +3,6 @@
 
 float next_step_size(float, float *, float *);
 float next_throttle_fraction(void);
-float *update_throttle(float, float*, float*, float *);
+void update_throttle(float, float*, float*, float *);
 
 #endif

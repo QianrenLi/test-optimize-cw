@@ -7,7 +7,7 @@
 static float step_size = 0.1;
 static float throttle_fraction = 0.1;
 
-float next_step_size(float *observed_rtt_list, float *target_rtt_list, float his_step_size)
+float next_step_size(float *observed_rtt_list, float *target_rtt_list)
 {
     int i;
     int length;
@@ -22,12 +22,14 @@ float next_step_size(float *observed_rtt_list, float *target_rtt_list, float his
     {
         if (observed_rtt_list[i] > target_rtt_list[i])
         {
-            return MIN(his_step_size, -his_step_size / 2);
+            step_size = MIN(step_size, -step_size / 2);
+            return step_size;
         }
     }
 
     // else, increase the control
-    return MAX(his_step_size, -his_step_size / 2);
+    step_size = MAX(step_size, -step_size / 2);
+    return step_size;
 }
 
 float next_throttle_fraction()
@@ -43,7 +45,7 @@ float next_throttle_fraction()
     return throttle_fraction;
 }
 
-float *update_throttle(float throttle, float *sorted_mcs, float *sorted_thru, float *out_sorted_throttle)
+void update_throttle(float throttle, float *sorted_mcs, float *sorted_thru, float *out_sorted_throttle)
 {
     int i;
     int length, _length, __length;
@@ -66,5 +68,5 @@ float *update_throttle(float throttle, float *sorted_mcs, float *sorted_thru, fl
     {
         out_sorted_throttle[i] = normalized_thru * sorted_mcs[i] - sorted_thru[i];
     }
-    return out_sorted_throttle;
+    return;
 }
