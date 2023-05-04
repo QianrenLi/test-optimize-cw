@@ -46,5 +46,6 @@ float next_throttle_fraction()
 
 float *_update_throttle(float *sorted_mcs, float *sorted_thru, float throttle)
 {
+    
     return NULL;
 }
