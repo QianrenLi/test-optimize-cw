@@ -5,6 +5,7 @@ import json
 ##=======================================================================##
 import ctypes
 NATIVE_MOD = ctypes.CDLL('./liboptimize.so')
+NATIVE_MOD.fraction_to_throttle.restype = ctypes.POINTER(ctypes.c_float)
 def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
     return (arr_type * len(arr))(*arr)
 ##=======================================================================##
