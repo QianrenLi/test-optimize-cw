@@ -142,11 +142,11 @@ class Graph:
         sorted_mcs = _list_to_c_array( [mcs[key] for key in throttle] )
         sorted_thru = _list_to_c_array( [thru[key] for key in throttle] )
         out_sorted_throttle = _list_to_c_array( [0.0]*len(sorted_mcs) )
-        NATIVE_MOD.update_throttle(ctypes.c_float(fraction), sorted_mcs, sorted_thru, out_sorted_throttle)
+        NATIVE_MOD.fraction_to_throttle(ctypes.c_float(fraction), sorted_mcs, sorted_thru, out_sorted_throttle)
         out_sorted_throttle = [float(x) for x in out_sorted_throttle]
         # sorted_throttle = self.update_throttle(sorted_mcs, sorted_thru, fraction)
         for i, link_name in enumerate(throttle.keys()):
             throttle.update({link_name: out_sorted_throttle[i]})
         ##
         port_throttle = self._link_to_port_throttle(throttle)
-        return fraction, port_throttle
+        return port_throttle

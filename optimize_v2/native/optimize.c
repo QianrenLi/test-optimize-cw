@@ -7,7 +7,20 @@
 static float step_size = 0.1;
 static float throttle_fraction = 0.1;
 
-float next_step_size(float const *observed_rtt_list, float const *target_rtt_list)
+static float calc_throttle_fraction(float step_size)
+{
+    if (throttle_fraction + step_size > 0)
+    {
+        throttle_fraction = MIN(0.9999, throttle_fraction + step_size);
+    }
+    else
+    {
+        throttle_fraction = 0.0001;
+    }
+    return throttle_fraction;
+}
+
+float next_throttle_fraction(float const *const observed_rtt_list, float const *const target_rtt_list)
 {
     int i;
     int length;
@@ -23,29 +36,18 @@ float next_step_size(float const *observed_rtt_list, float const *target_rtt_lis
         if (observed_rtt_list[i] > target_rtt_list[i])
         {
             step_size = MIN(step_size, -step_size / 2);
-            return step_size;
+            goto out;
         }
     }
 
     // else, increase the control
     step_size = MAX(step_size, -step_size / 2);
-    return step_size;
-}
-
-float next_throttle_fraction()
-{
-    if (throttle_fraction + step_size > 0)
-    {
-        throttle_fraction = MIN(0.9999, throttle_fraction + step_size);
-    }
-    else
-    {
-        throttle_fraction = 0.0001;
-    }
+out:
+    calc_throttle_fraction(step_size);
     return throttle_fraction;
 }
 
-void update_throttle(float throttle, float const *sorted_mcs, float const *sorted_thru, float *const out_sorted_throttle)
+void fraction_to_throttle(float fraction, float const *const sorted_mcs, float const *const sorted_thru, float *const out_sorted_throttle)
 {
     int i;
     int length, _length, __length;
@@ -62,7 +64,7 @@ void update_throttle(float throttle, float const *sorted_mcs, float const *sorte
     {
         link_fraction += sorted_thru[i] / sorted_mcs[i];
     }
-    normalized_thru = (link_fraction + throttle) / length;
+    normalized_thru = (link_fraction + fraction) / length;
 
     for (i = 0; i < length; i++)
     {

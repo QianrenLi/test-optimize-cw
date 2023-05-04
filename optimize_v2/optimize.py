@@ -306,7 +306,7 @@ def extract_data_from_graph(graph, data_graph, index):
     pass
 
 
-def update_step_size_and_throttle(algorithm_type, graph, **kwargs):
+def update_throttle_fraction(algorithm_type, graph, **kwargs):
     # get target value from info graph
     target_rtt = 1000
     if algorithm_type == "one_dimensional_search":
@@ -334,11 +334,10 @@ def update_step_size_and_throttle(algorithm_type, graph, **kwargs):
         
         observed_rtt_list = _list_to_c_array( observed_rtt_list )
         target_rtt_list   = _list_to_c_array( target_rtt_list )
-        this_step_size = NATIVE_MOD.next_step_size(observed_rtt_list, target_rtt_list)
-        this_throttle  = NATIVE_MOD.next_throttle_fraction()
-        return (this_step_size,this_throttle)
+        this_throttle = NATIVE_MOD.next_step_size(observed_rtt_list, target_rtt_list)
+        return this_throttle
         # return max(history_step_size, -history_step_size/2)
-    return (0.1,0.1)
+    return 0.1
 
 
 def graph_plot():
@@ -429,9 +428,9 @@ def control_thread(graph, time_limit, period):
         is_draw.set()
 
         ##=======================================================================##
-        (_step_size, this_throttle) = update_step_size_and_throttle("one_dimensional_search", graph)
+        this_throttle_fraction = update_throttle_fraction("one_dimensional_search", graph)
         # update throttle
-        _last_throttle, port_throttle = graph.update_throttle(this_throttle)
+        port_throttle = graph.update_throttle(this_throttle_fraction)
         ##=======================================================================##
         
         print(port_throttle)
