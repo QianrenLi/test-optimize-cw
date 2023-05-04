@@ -109,22 +109,11 @@ class Graph:
     # core function
     @staticmethod
     def _update_throttle(sorted_mcs, sorted_thru, allocated_times):
-        matrix_size = len(sorted_mcs)
-        matrix_A = np.zeros((matrix_size, matrix_size))
-        vector_b = np.zeros(matrix_size)
-        for i in range(matrix_size):
-            if i == 0:
-                matrix_A[i, :] = 1 / np.array(sorted_mcs)
-                vector_b[i] = allocated_times
-            else:
-                matrix_A[i, i-1:i +
-                         1] = np.array([sorted_mcs[i-1], -sorted_mcs[i]])
-                vector_b[i] = sorted_thru[i]/sorted_mcs[i] - \
-                    sorted_thru[i]/sorted_mcs[i-1]
-
-        # solve linear equations denoted by matrix A and vector b
-        throttle = np.linalg.solve(matrix_A, vector_b)
-        return throttle
+        # calculate the throughput/MCS (without file) of each link
+        link_fraction = [sorted_thru[i]/sorted_mcs[i] for i in range(len(sorted_mcs))]
+        # calculate the normalized throughput
+        normalized_thru = sum(link_fraction) + allocated_times
+        return [normalized_thru * sorted_mcs[i] for i in range(len(sorted_mcs))]
 
     def _link_to_port_throttle(self, link_throttle):
         port_throttle = {}
