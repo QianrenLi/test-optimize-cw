@@ -4,8 +4,8 @@
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) < (b)) ? (b) : (a))
 
-static float step_size = 0.1;
-static float throttle_fraction = 0.1;
+float step_size = 0.1;
+float throttle_fraction = 0.8;
 
 static float calc_throttle_fraction(float step_size)
 {
@@ -20,15 +20,9 @@ static float calc_throttle_fraction(float step_size)
     return throttle_fraction;
 }
 
-float next_throttle_fraction(float const *const observed_rtt_list, float const *const target_rtt_list)
+float next_throttle_fraction(int length, float const *const observed_rtt_list, float const *const target_rtt_list)
 {
     int i;
-    int length;
-    int _length;
-
-    length = (int)(sizeof(observed_rtt_list) / sizeof(float *));
-    _length = (int)(sizeof(target_rtt_list) / sizeof(float *));
-    assert(length == _length);
 
     // if all observed RTT are smaller than target RTT, then decrease control
     for (i = 0; i < length; i++)
@@ -43,26 +37,25 @@ float next_throttle_fraction(float const *const observed_rtt_list, float const *
     // else, increase the control
     step_size = MAX(step_size, -step_size / 2);
 out:
+    printf("step_size: %f\n",step_size);
     calc_throttle_fraction(step_size);
+    printf("throttle_fraction: %f\n",throttle_fraction);
+    
     return throttle_fraction;
 }
 
-void fraction_to_throttle(float fraction, float const *const sorted_mcs, float const *const sorted_thru, float *const out_sorted_throttle)
+void fraction_to_throttle(float fraction, int length, float const *const sorted_mcs, float const *const sorted_thru, float *const out_sorted_throttle)
 {
     int i;
-    int length, _length, __length;
     float link_fraction, normalized_thru;
 
-    length = (int)(sizeof(sorted_mcs) / sizeof(float *));
-    _length = (int)(sizeof(sorted_thru) / sizeof(float *));
-    __length = (int)(sizeof(out_sorted_throttle) / sizeof(float *));
-    assert(length == _length);
-    assert(length == __length);
-
+    printf("length%d\n",length);
     link_fraction = 0;
     for (i = 0; i < length; i++)
     {
+        printf("sorted_thru %f\n",sorted_thru[i]);
         link_fraction += sorted_thru[i] / sorted_mcs[i];
+        printf("link_fraction %f\n",link_fraction);
     }
     normalized_thru = (link_fraction + fraction) / length;
 
