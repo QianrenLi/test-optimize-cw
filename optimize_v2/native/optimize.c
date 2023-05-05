@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
+#include "optimize.h"
 
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) < (b)) ? (b) : (a))
@@ -37,10 +38,7 @@ float next_throttle_fraction(int length, float const *const observed_rtt_list, f
     // else, increase the control
     step_size = MAX(step_size, -step_size / 2);
 out:
-    printf("step_size: %f\n",step_size);
     calc_throttle_fraction(step_size);
-    printf("throttle_fraction: %f\n",throttle_fraction);
-    
     return throttle_fraction;
 }
 
@@ -49,7 +47,6 @@ void fraction_to_throttle(float fraction, int length, float const *const sorted_
     int i;
     float link_fraction, normalized_thru;
 
-    printf("length%d\n",length);
     link_fraction = 0;
     for (i = 0; i < length; i++)
     {

@@ -1,0 +1,3 @@
+[submodule "optimize_v2/stream-replay"]
+	path = optimize_v2/stream-replay
+	url = https://github.com/lasso-sustech/stream-replay.git

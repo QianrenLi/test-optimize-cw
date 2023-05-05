@@ -6,6 +6,7 @@ from tap_pipe import ipc_socket
 import threading
 import json
 import time
+import os
 import re
 import argparse
 import matplotlib.pyplot as plt
@@ -364,10 +365,11 @@ def update_throttle_fraction(algorithm_type, graph, **kwargs):
                             #     return min(history_step_size, -history_step_size/2)
                     except:
                         continue
+        
+        length = ctypes.c_int( len(observed_rtt_list) )
         observed_rtt_list = _list_to_c_array( observed_rtt_list )
         target_rtt_list   = _list_to_c_array( target_rtt_list )
-        this_throttle = NATIVE_MOD.next_throttle_fraction(ctypes.c_int(len(observed_rtt_list)), observed_rtt_list, target_rtt_list)
-        print("return thro",this_throttle)
+        this_throttle = NATIVE_MOD.next_throttle_fraction(length, observed_rtt_list, target_rtt_list)
         return this_throttle
         # return max(history_step_size, -history_step_size/2)
     return 0.1
@@ -671,7 +673,6 @@ def transmission_thread(graph):
 
 
 def main(args):
-    import os
     os.system('make')
     graph = get_graph(args.scenario)
     if args.scenario > 0:
