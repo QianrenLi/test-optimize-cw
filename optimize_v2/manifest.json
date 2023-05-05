@@ -6,10 +6,10 @@
         "data": "stream-replay/data/*",
         "src": "stream-replay/src/*",
         "tool_read_rtt": "tools/read_mcs.py",
-        "tool":"tools/tool.py",
-        "tool_extract_ip_addr":"tools/extract_ip_addr.py",
+        "tool":"tools/*",
         "cargo_lock":"stream-replay/Cargo.lock",
-        "cargo_toml":"stream-replay/Cargo.toml"
+        "cargo_toml":"stream-replay/Cargo.toml",
+        "tap_file":"tap.py"
     },
     "functions": {
         "outputs_throughput": {

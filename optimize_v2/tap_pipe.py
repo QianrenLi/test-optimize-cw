@@ -11,7 +11,7 @@ class ipc_socket():
 
     def __init__(self, ip_addr, ipc_port, local_port=12345, link_name=""):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # self.sock.settimeout(0.5)
+        self.sock.settimeout(0.05)
         self.sock.bind(("0.0.0.0", local_port))
         self.link_name = link_name
         self.ip_addr = ip_addr
@@ -54,7 +54,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     ##
-    parser.add_argument('-p', '--port', default=5201,
+    parser.add_argument('-p', '--port', default=0,
                         type=int, help='binding port for receiving.')
     parser.add_argument('-i', '--ip_addr',
                         default="192.168.3.15", type=str, help='IP.')
