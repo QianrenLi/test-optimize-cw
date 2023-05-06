@@ -29,13 +29,14 @@ def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
     return (arr_type * len(arr))(*arr)
 ## =======================================================================##
 
-
+## ==================Constant parameter================================= ##
 DURATION = 10
 rx_DURATION = 10
 
-
+CONTROL_ON = False
 control_period = 0.5
 control_times = 9 / control_period
+## ==================Constant parameter================================= ##
 
 ## ==================threading parameter================================= ##
 is_control = threading.Event()
@@ -98,7 +99,7 @@ def get_scenario_local_test():
     link3 = graph.ADD_LINK('PC', 'phone', 'lo', 866.7)
 
     graph.ADD_STREAM(link1, port_number=list(range(5202, 5205)),
-                     file_name="file_75MB.npy", duration=[3, 10], thru=0)
+                     file_name="file_75MB.npy", duration=[0, 10], thru=0)
     graph.ADD_STREAM(link1, port_number=6201, file_name="proj_6.25MB.npy", duration=[
                      0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=96, target_rtt=18)
 
@@ -481,18 +482,19 @@ def _send_data(sock):
             return_num.release()
         is_collect.clear()
 
-        is_control.wait()
-        time.sleep(0.01)
-        if sock.link_name in throttle.keys():
-            _buffer, _retry_idx = _loop_tx(
-                sock,  "throttle", throttle[sock.link_name])
-            return_num.release()
-            if _retry_idx == 3:
-                is_control.clear()
-                break
+        if CONTROL_ON:
+            is_control.wait()
+            time.sleep(0.01)
+            if sock.link_name in throttle.keys():
+                _buffer, _retry_idx = _loop_tx(
+                    sock,  "throttle", throttle[sock.link_name])
+                return_num.release()
+                if _retry_idx == 3:
+                    is_control.clear()
+                    break
 
-        time.sleep(0.01)  # waiting for clear event
-        is_control.clear()
+            time.sleep(0.01)  # waiting for clear event
+            is_control.clear()
     print("socket thread stopping")
 
 # create a control_thread
@@ -516,19 +518,19 @@ def control_thread(graph, time_limit, period):
         # plot data
         extract_data_from_graph(graph, data_graph, control_times)
         is_draw.set()
+        if CONTROL_ON:
+            ## =======================================================================##
+            port_throttle = _throttle_calc(graph)
+            ## =======================================================================##
 
-        ## =======================================================================##
-        port_throttle = _throttle_calc(graph)
-        ## =======================================================================##
+            # print(port_throttle)
+            throttle.update(port_throttle)
 
-        # print(port_throttle)
-        throttle.update(port_throttle)
+            # start control
+            is_control.set()
 
-        # start control
-        is_control.set()
-
-        # wait until socket returns
-        _blocking_wait(return_num, graph)
+            # wait until socket returns
+            _blocking_wait(return_num, graph)
 
         control_times += 1
         time.sleep(period)
