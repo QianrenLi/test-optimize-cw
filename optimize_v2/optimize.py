@@ -39,17 +39,20 @@ rx_DURATION = 10
 control_period = 0.5
 control_times = 9 / control_period
 
+## ==================threading parameter================================= ##
 is_control = threading.Event()
 is_collect = threading.Event()
 is_draw = threading.Event()
 is_writing = threading.Lock()
 is_stop = False
 return_num = threading.Semaphore(0)
+## ==================threading parameter================================= ##
 
 
 data_graph = {}
 throttle = {}
 system_return = {}
+file_stream_nums = 0
 
 name_dict = {'throughput': 'thru'}
 
@@ -378,7 +381,7 @@ def update_throttle_fraction(algorithm_type, graph, **kwargs):
                             #     return min(history_step_size, -history_step_size/2)
                     except:
                         continue
-
+                
         length = len(observed_rtt_list)
         observed_rtt_list = _list_to_c_array(observed_rtt_list)
         target_rtt_list = _list_to_c_array(target_rtt_list)
@@ -386,6 +389,16 @@ def update_throttle_fraction(algorithm_type, graph, **kwargs):
             length, observed_rtt_list, target_rtt_list)
         return this_throttle
     return 0.1
+
+
+def _update_file_stream_nums(graph):
+    file_stream_nums = 0
+    for device_name, links in graph.graph.items():
+        for link_name, streams in links.items():
+            for stream_name, stream in streams.items():
+                if "file" in stream["file_name"] and graph.info_graph[device_name][link_name][stream_name]["active"] == True:
+                    file_stream_nums += 1
+    return file_stream_nums
 
 
 def graph_plot():
@@ -410,6 +423,27 @@ def graph_plot():
     plt.ioff()
     plt.close(fig)
 # create a sub-threading to send data given an ipc socket
+
+
+def _throttle_calc(graph):
+    global file_stream_nums
+    # detect whether the num of file stream changes
+    _file_stream_nums = _update_file_stream_nums(graph)
+    if _file_stream_nums != file_stream_nums:
+        file_stream_nums = _file_stream_nums
+        control_type = "init"
+        init_fraction = 0.6
+        this_throttle_fraction = init_fraction
+        # TODO: add init optimize.c
+    else:
+        control_type = "descent"
+        this_throttle_fraction = update_throttle_fraction(
+        "one_dimensional_search", graph)
+    print(control_type, this_throttle_fraction)
+    # update throttle
+    port_throttle = graph.update_throttle(this_throttle_fraction,control_type)
+    return port_throttle
+    
 
 
 def _loop_tx(sock, *args):
@@ -496,10 +530,7 @@ def control_thread(graph, time_limit, period):
         is_draw.set()
 
         ## =======================================================================##
-        this_throttle_fraction = update_throttle_fraction(
-            "one_dimensional_search", graph)
-        # update throttle
-        port_throttle = graph.update_throttle(this_throttle_fraction)
+        port_throttle = _throttle_calc(graph)
         ## =======================================================================##
 
         # print(port_throttle)

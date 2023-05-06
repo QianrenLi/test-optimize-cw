@@ -120,10 +120,10 @@ class Graph:
         normalized_thru = ( link_fraction + allocated_times ) / len(sorted_mcs);
         return [normalized_thru * sorted_mcs[i] - sorted_thru[i] for i in range(len(sorted_mcs))]
 
-
-    def _max_throttle(self,sorted_mcs, sorted_thru, max_factor):
+    @staticmethod
+    def _init_allocated_times(sorted_mcs, sorted_thru, init_factor):
         allocated_times = 1 - sum( [sorted_thru[i]/sorted_mcs[i] for i in range(len(sorted_mcs))] )
-        return self._update_throttle(sorted_mcs, sorted_thru, allocated_times*max_factor)
+        return allocated_times*init_factor
 
     def _link_to_port_throttle(self, link_throttle):
         port_throttle = {}
@@ -145,14 +145,18 @@ class Graph:
                                 {port_name: _port_throttle})
         return port_throttle
 
-    def update_throttle(self, fraction):
+    def update_throttle(self, fraction, control_type="descent"):
         # add last throttle value together
         thru, throttle, mcs = self.graph_to_control_coefficient()
-        print("init_mcs",[mcs[key] for key in throttle])
+        sorted_mcs = [mcs[key] for key in throttle]
+        sorted_thru = [thru[key] for key in throttle]
+        if control_type == "init":
+            fraction = self._init_allocated_times(sorted_mcs, sorted_thru, fraction)
+        # print("init_mcs",[mcs[key] for key in throttle])
         ##
         length = len(throttle)
-        sorted_mcs = _list_to_c_array( [mcs[key] for key in throttle] )
-        sorted_thru = _list_to_c_array( [thru[key] for key in throttle] )
+        sorted_mcs = _list_to_c_array( sorted_mcs)
+        sorted_thru = _list_to_c_array( sorted_thru )
         out_sorted_throttle = _list_to_c_array( [0.0]*length )
         NATIVE_MOD.fraction_to_throttle(fraction, length,
                                         sorted_mcs, sorted_thru, out_sorted_throttle)
