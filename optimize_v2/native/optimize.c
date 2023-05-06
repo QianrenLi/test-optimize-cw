@@ -21,7 +21,7 @@ static float calc_throttle_fraction(float step_size)
     return throttle_fraction;
 }
 
-float next_throttle_fraction(int length, float const *const observed_rtt_list, float const *const target_rtt_list)
+float update_throttle_fraction(int length, float const *const observed_rtt_list, float const *const target_rtt_list)
 {
     int i;
 

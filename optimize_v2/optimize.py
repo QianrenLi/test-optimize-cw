@@ -10,14 +10,18 @@ import os
 import re
 import argparse
 import matplotlib.pyplot as plt
-# import matplotlib.colors as mcolors
-# mcolors.BASE_COLORS.keys()
-COLORS = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'orange', 'lawngreen', 'slategrey', 'yellowgreen']
+
+import matplotlib.colors as mcolors
+COLORS = plt.rcParams['axes.prop_cycle'].by_key()['color'] + list(mcolors.BASE_COLORS.keys())
+# ['SteelBlue', 'DarkOrange', 'ForestGreen', 'Crimson', 'MediumPurple', 'RosyBrown', 'Pink', 'Gray', 'Olive', 'Turquoise']
+# ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w']
 
 ##=======================================================================##
 import ctypes
 NATIVE_MOD = ctypes.CDLL('./liboptimize.so')
-NATIVE_MOD.next_throttle_fraction.restype = ctypes.c_float
+NATIVE_MOD.update_throttle_fraction.restype = ctypes.c_float
+NATIVE_MOD.update_throttle_fraction.argtypes = [
+    ctypes.c_int, ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float) ]
 def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
     return (arr_type * len(arr))(*arr)
 ##=======================================================================##
@@ -366,12 +370,11 @@ def update_throttle_fraction(algorithm_type, graph, **kwargs):
                     except:
                         continue
         
-        length = ctypes.c_int( len(observed_rtt_list) )
+        length = len(observed_rtt_list)
         observed_rtt_list = _list_to_c_array( observed_rtt_list )
         target_rtt_list   = _list_to_c_array( target_rtt_list )
-        this_throttle = NATIVE_MOD.next_throttle_fraction(length, observed_rtt_list, target_rtt_list)
+        this_throttle = NATIVE_MOD.update_throttle_fraction(length, observed_rtt_list, target_rtt_list)
         return this_throttle
-        # return max(history_step_size, -history_step_size/2)
     return 0.1
 
 

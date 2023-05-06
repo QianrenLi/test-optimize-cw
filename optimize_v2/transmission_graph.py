@@ -6,6 +6,10 @@ import json
 import ctypes
 NATIVE_MOD = ctypes.CDLL('./liboptimize.so')
 NATIVE_MOD.fraction_to_throttle.restype = ctypes.c_void_p
+NATIVE_MOD.fraction_to_throttle.argtypes = [
+    ctypes.c_float, ctypes.c_int,
+    ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float),
+    ctypes.POINTER(ctypes.c_float) ]
 def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
     return (arr_type * len(arr))(*arr)
 ##=======================================================================##
@@ -141,12 +145,12 @@ class Graph:
         thru, throttle, mcs = self.graph_to_control_coefficient()
         print("init_mcs",[mcs[key] for key in throttle])
         ##
-        length = ctypes.c_int( len(sorted_mcs) )
+        length = len(throttle)
         sorted_mcs = _list_to_c_array( [mcs[key] for key in throttle] )
         sorted_thru = _list_to_c_array( [thru[key] for key in throttle] )
         out_sorted_throttle = _list_to_c_array( [0.0]*length )
-        NATIVE_MOD.fraction_to_throttle( ctypes.c_float(fraction), length,
-                                            sorted_mcs, sorted_thru, out_sorted_throttle)
+        NATIVE_MOD.fraction_to_throttle(fraction, length,
+                                        sorted_mcs, sorted_thru, out_sorted_throttle)
         out_sorted_throttle = [float(x) for x in out_sorted_throttle]
 
         # out_sorted_throttle = self._update_throttle([mcs[key] for key in throttle], [thru[key] for key in throttle], fraction)
