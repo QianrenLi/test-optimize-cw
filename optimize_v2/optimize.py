@@ -11,12 +11,9 @@ import os
 import re
 import argparse
 import matplotlib.pyplot as plt
-
 import matplotlib.colors as mcolors
-
-
 COLORS = plt.rcParams['axes.prop_cycle'].by_key(
-)['color'] + list(mcolors.BASE_COLORS.keys())
+)['color'] + list(mcolors.BASE_COLORS.keys()) # type: ignore
 # ['SteelBlue', 'DarkOrange', 'ForestGreen', 'Crimson', 'MediumPurple', 'RosyBrown', 'Pink', 'Gray', 'Olive', 'Turquoise']
 # ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w']
 
@@ -24,9 +21,10 @@ COLORS = plt.rcParams['axes.prop_cycle'].by_key(
 NATIVE_MOD = ctypes.CDLL('./liboptimize.so')
 NATIVE_MOD.update_throttle_fraction.restype = ctypes.c_float
 NATIVE_MOD.update_throttle_fraction.argtypes = [
-    ctypes.c_int, ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float)]
-
-
+    ctypes.c_int, ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float) ]
+NATIVE_MOD.init_throttle_fraction.restype = ctypes.c_float
+NATIVE_MOD.init_throttle_fraction.argtypes = [
+    ctypes.c_int, ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float) ]
 def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
     return (arr_type * len(arr))(*arr)
 ## =======================================================================##
@@ -291,7 +289,8 @@ def update_fig(fig, axs, data_graph):
     import numpy as np
     [ax.clear() for ax in axs]
 
-    idx_to_key = ["rtts", "thus"]
+    idx_to_key = ["rtts", "thrus"]
+    idx_to_names = ['RTT (unit: ms)', 'Throughput (unit: Mbps)']
     start_point = 2
     for _idx in range(len(axs)):
         x_axs = [0, 1]
@@ -318,7 +317,7 @@ def update_fig(fig, axs, data_graph):
                         y_axs[1] = max(y_axs[1], max(vector_y))
 
         axs[_idx].set_xlabel("time (s)")
-        axs[_idx].set_ylabel(idx_to_key[_idx])
+        axs[_idx].set_ylabel(idx_to_names[_idx])
         axs[_idx].set_ylim(y_axs[0] * 0.9, y_axs[1] * 1.1)
         axs[_idx].set_xlim(x_axs[0] * 0.9, x_axs[1] * 1.1)
         axs[_idx].legend(legends)
@@ -341,7 +340,7 @@ def extract_data_from_graph(graph, data_graph, index):
                 # update stream
                 if stream_name not in data_graph[device_name][link_name].keys():
                     data_graph[device_name][link_name][stream_name] = {
-                        "indexes": [], "rtts": [], "thus": []}
+                        "indexes": [], "rtts": [], "thrus": []}
                 # append rtt and throughput
                 if graph.info_graph[device_name][link_name][stream_name]["active"] == True:
                     try:
@@ -349,7 +348,7 @@ def extract_data_from_graph(graph, data_graph, index):
                             stream["rtt"] * 1000)
                         data_graph[device_name][link_name][stream_name]["indexes"].append(
                             index)
-                        data_graph[device_name][link_name][stream_name]["thus"].append(
+                        data_graph[device_name][link_name][stream_name]["thrus"].append(
                             stream["throughput"])
                     except:
                         print(device_name, link_name, stream_name)
@@ -360,7 +359,6 @@ def update_throttle_fraction(algorithm_type, graph, **kwargs):
     # get target value from info graph
     target_rtt = 1000
     if algorithm_type == "one_dimensional_search":
-        # history_step_size = kwargs['history_step_size']
         rtt_value = 0
 
         observed_rtt_list = list()
@@ -377,17 +375,15 @@ def update_throttle_fraction(algorithm_type, graph, **kwargs):
                             rtt_value = graph.graph[device_name][link_name][stream_name]["rtt"]
                             observed_rtt_list.append(rtt_value*1E3)
                             target_rtt_list.append(target_rtt)
-                            # if rtt_value * 1e3 > target_rtt:
-                            #     return min(history_step_size, -history_step_size/2)
                     except:
                         continue
                 
         length = len(observed_rtt_list)
         observed_rtt_list = _list_to_c_array(observed_rtt_list)
         target_rtt_list = _list_to_c_array(target_rtt_list)
-        this_throttle = NATIVE_MOD.update_throttle_fraction(
+        this_throttle_fraction = NATIVE_MOD.update_throttle_fraction(
             length, observed_rtt_list, target_rtt_list)
-        return this_throttle
+        return this_throttle_fraction
     return 0.1
 
 
@@ -428,20 +424,12 @@ def graph_plot():
 def _throttle_calc(graph):
     global file_stream_nums
     # detect whether the num of file stream changes
-    _file_stream_nums = _update_file_stream_nums(graph)
-    if _file_stream_nums != file_stream_nums:
-        file_stream_nums = _file_stream_nums
-        control_type = "init"
-        init_fraction = 0.6
-        this_throttle_fraction = init_fraction
-        # TODO: add init optimize.c
-    else:
-        control_type = "descent"
-        this_throttle_fraction = update_throttle_fraction(
-        "one_dimensional_search", graph)
-    print(control_type, this_throttle_fraction)
+    current_file_stream_nums = _update_file_stream_nums(graph)
+    reset_flag =  file_stream_nums==0 and current_file_stream_nums!=0
+    this_throttle_fraction = update_throttle_fraction("one_dimensional_search", graph)
     # update throttle
-    port_throttle = graph.update_throttle(this_throttle_fraction,control_type)
+    file_stream_nums = current_file_stream_nums
+    port_throttle = graph.update_throttle(this_throttle_fraction, reset_flag)
     return port_throttle
     
 

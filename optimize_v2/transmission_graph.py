@@ -145,21 +145,22 @@ class Graph:
                                 {port_name: _port_throttle})
         return port_throttle
 
-    def update_throttle(self, fraction, control_type="descent"):
+    def update_throttle(self, fraction, reset_flag:bool):
         # add last throttle value together
         thru, throttle, mcs = self.graph_to_control_coefficient()
         sorted_mcs = [mcs[key] for key in throttle]
         sorted_thru = [thru[key] for key in throttle]
-        if control_type == "init":
-            fraction = self._init_allocated_times(sorted_mcs, sorted_thru, fraction)
-        # print("init_mcs",[mcs[key] for key in throttle])
         ##
         length = len(throttle)
         sorted_mcs = _list_to_c_array( sorted_mcs)
         sorted_thru = _list_to_c_array( sorted_thru )
         out_sorted_throttle = _list_to_c_array( [0.0]*length )
-        NATIVE_MOD.fraction_to_throttle(fraction, length,
-                                        sorted_mcs, sorted_thru, out_sorted_throttle)
+        ##
+        if reset_flag:
+            fraction = NATIVE_MOD.init_throttle_fraction(length, sorted_mcs, sorted_thru)
+        ##
+        NATIVE_MOD.fraction_to_throttle(fraction, length, sorted_mcs, sorted_thru,
+                                        out_sorted_throttle)
         out_sorted_throttle = [float(x) for x in out_sorted_throttle]
 
         # out_sorted_throttle = self._update_throttle([mcs[key] for key in throttle], [thru[key] for key in throttle], fraction)

@@ -5,18 +5,21 @@
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) < (b)) ? (b) : (a))
 
-float step_size = 0.1;
-float throttle_fraction = 0.8;
+static const float MIN_FRAC = 1E-4;
+static const float DISCOUNT = 0.6;
+
+float step_size = 0.0;
+float throttle_fraction = 0.0;
 
 static float calc_throttle_fraction(float step_size)
 {
     if (throttle_fraction + step_size > 0)
     {
-        throttle_fraction = MIN(0.9999, throttle_fraction + step_size);
+        throttle_fraction = MIN(1 - MIN_FRAC, throttle_fraction + step_size);
     }
     else
     {
-        throttle_fraction = 0.0001;
+        throttle_fraction = MIN_FRAC;
     }
     return throttle_fraction;
 }
@@ -50,9 +53,7 @@ void fraction_to_throttle(float fraction, int length, float const *const sorted_
     link_fraction = 0;
     for (i = 0; i < length; i++)
     {
-        printf("sorted_thru %f\n",sorted_thru[i]);
         link_fraction += sorted_thru[i] / sorted_mcs[i];
-        printf("link_fraction %f\n",link_fraction);
     }
     normalized_thru = (link_fraction + fraction) / length;
 
@@ -61,4 +62,21 @@ void fraction_to_throttle(float fraction, int length, float const *const sorted_
         out_sorted_throttle[i] = normalized_thru * sorted_mcs[i] - sorted_thru[i];
     }
     return;
+}
+
+float init_throttle_fraction(int length, float const *const sorted_mcs, float const *const sorted_thru)
+{
+    int i;
+    float link_fraction;
+
+    link_fraction = 0;
+    for (i = 0; i < length; i++)
+    {
+        link_fraction += sorted_thru[i] / sorted_mcs[i];
+    }
+    link_fraction = 1 - link_fraction;
+
+    throttle_fraction = link_fraction * DISCOUNT;
+    step_size = 0.1;
+    return throttle_fraction;
 }
