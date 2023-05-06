@@ -120,6 +120,11 @@ class Graph:
         normalized_thru = ( link_fraction + allocated_times ) / len(sorted_mcs);
         return [normalized_thru * sorted_mcs[i] - sorted_thru[i] for i in range(len(sorted_mcs))]
 
+
+    def _max_throttle(self,sorted_mcs, sorted_thru, max_factor):
+        allocated_times = 1 - sum( [sorted_thru[i]/sorted_mcs[i] for i in range(len(sorted_mcs))] )
+        return self._update_throttle(sorted_mcs, sorted_thru, allocated_times*max_factor)
+
     def _link_to_port_throttle(self, link_throttle):
         port_throttle = {}
         for device_name, links in self.graph.items():

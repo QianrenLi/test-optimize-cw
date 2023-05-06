@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import ctypes
 from transmission_graph import Graph
 from tap import Connector
 from tap_pipe import ipc_socket
@@ -12,19 +13,24 @@ import argparse
 import matplotlib.pyplot as plt
 
 import matplotlib.colors as mcolors
-COLORS = plt.rcParams['axes.prop_cycle'].by_key()['color'] + list(mcolors.BASE_COLORS.keys())
+
+
+COLORS = plt.rcParams['axes.prop_cycle'].by_key(
+)['color'] + list(mcolors.BASE_COLORS.keys())
 # ['SteelBlue', 'DarkOrange', 'ForestGreen', 'Crimson', 'MediumPurple', 'RosyBrown', 'Pink', 'Gray', 'Olive', 'Turquoise']
 # ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w']
 
-##=======================================================================##
-import ctypes
+## =======================================================================##
 NATIVE_MOD = ctypes.CDLL('./liboptimize.so')
 NATIVE_MOD.update_throttle_fraction.restype = ctypes.c_float
 NATIVE_MOD.update_throttle_fraction.argtypes = [
-    ctypes.c_int, ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float) ]
+    ctypes.c_int, ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float)]
+
+
 def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
     return (arr_type * len(arr))(*arr)
-##=======================================================================##
+## =======================================================================##
+
 
 DURATION = 10
 rx_DURATION = 10
@@ -105,6 +111,7 @@ def get_scenario_local_test():
     graph.associate_ip('phone', 'lo', '127.0.0.1')
     return graph
 
+
 def get_scenario_test():
     graph = Graph()
     graph.ADD_DEVICE('PC')
@@ -145,10 +152,10 @@ def get_scenario_1_graph():
                      0, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=96, target_rtt=18)
 
     graph.ADD_STREAM(link2, port_number=6202, file_name="voice_0.05MB.npy", duration=[
-                     0, DURATION], thru=name_to_thru("voice_0.05MB.npy"),tos=192, target_rtt=40)
+                     0, DURATION], thru=name_to_thru("voice_0.05MB.npy"), tos=192, target_rtt=40)
 
     # graph.ADD_STREAM(link3, port_number=6203, file_name="proj_6.25MB.npy", duration=[
-    #                  0, DURATION], thru=name_to_thru("proj_6.25MB.npy"),tos=96, target_rtt=40)                
+    #                  0, DURATION], thru=name_to_thru("proj_6.25MB.npy"),tos=96, target_rtt=40)
 
     graph.ADD_STREAM(link4, port_number=6204, file_name="voice_0.05MB.npy", duration=[
                      0, DURATION], thru=name_to_thru("voice_0.05MB.npy"), tos=192, target_rtt=40)
@@ -267,7 +274,7 @@ def setup_ip(graph):
 def init_figure():
     lines = []
     axs = []
-    fig = plt.figure(figsize=(12.8,9.6))
+    fig = plt.figure(figsize=(12.8, 9.6))
     plt.ion()
     subplot_num = 2
     for _idx in range(subplot_num):
@@ -278,6 +285,7 @@ def init_figure():
 
 
 def update_fig(fig, axs, data_graph):
+    import numpy as np
     [ax.clear() for ax in axs]
 
     idx_to_key = ["rtts", "thus"]
@@ -292,21 +300,22 @@ def update_fig(fig, axs, data_graph):
                 for stream_name, stream in streams.items():
                     c = next(colors_iter)
                     if len(stream["indexes"]) > start_point:
+                        vector_x = np.asarray(
+                            stream["indexes"][start_point:]) * control_period
+                        vector_y = stream[idx_to_key[_idx]][start_point:]
                         _line, = axs[_idx].plot(
-                            range(len(stream["indexes"])), '.-',color=c)
-                        _line.set_xdata(stream["indexes"][start_point:])
-                        _line.set_ydata(stream[idx_to_key[_idx]][start_point:])
+                            range(len(stream["indexes"])), '.-', color=c)
+                        _line.set_xdata(vector_x)
+                        _line.set_ydata(vector_y)
                         legends.append(stream_name)
-                        x_axs[0] = min(x_axs[0], min(
-                            stream["indexes"][start_point:]))
-                        x_axs[1] = max(x_axs[1], max(
-                            stream["indexes"][start_point:]))
-                        y_axs[0] = min(y_axs[0], min(
-                            stream[idx_to_key[_idx]][start_point:]))
-                        y_axs[1] = max(y_axs[1], max(
-                            stream[idx_to_key[_idx]][start_point:]))
-                        
 
+                        x_axs[0] = min(x_axs[0], min(vector_x))
+                        x_axs[1] = max(x_axs[1], max(vector_x))
+                        y_axs[0] = min(y_axs[0], min(vector_y))
+                        y_axs[1] = max(y_axs[1], max(vector_y))
+
+        axs[_idx].set_xlabel("time (s)")
+        axs[_idx].set_ylabel(idx_to_key[_idx])
         axs[_idx].set_ylim(y_axs[0] * 0.9, y_axs[1] * 1.1)
         axs[_idx].set_xlim(x_axs[0] * 0.9, x_axs[1] * 1.1)
         axs[_idx].legend(legends)
@@ -363,17 +372,18 @@ def update_throttle_fraction(algorithm_type, graph, **kwargs):
                         target_rtt = graph.info_graph[device_name][link_name][stream_name]["target_rtt"]
                         if graph.info_graph[device_name][link_name][stream_name]["active"] == True:
                             rtt_value = graph.graph[device_name][link_name][stream_name]["rtt"]
-                            observed_rtt_list.append( rtt_value*1E3 )
-                            target_rtt_list.append( target_rtt )
+                            observed_rtt_list.append(rtt_value*1E3)
+                            target_rtt_list.append(target_rtt)
                             # if rtt_value * 1e3 > target_rtt:
                             #     return min(history_step_size, -history_step_size/2)
                     except:
                         continue
-        
+
         length = len(observed_rtt_list)
-        observed_rtt_list = _list_to_c_array( observed_rtt_list )
-        target_rtt_list   = _list_to_c_array( target_rtt_list )
-        this_throttle = NATIVE_MOD.update_throttle_fraction(length, observed_rtt_list, target_rtt_list)
+        observed_rtt_list = _list_to_c_array(observed_rtt_list)
+        target_rtt_list = _list_to_c_array(target_rtt_list)
+        this_throttle = NATIVE_MOD.update_throttle_fraction(
+            length, observed_rtt_list, target_rtt_list)
         return this_throttle
     return 0.1
 
@@ -388,10 +398,6 @@ def graph_plot():
         # check stopping
         if is_stop:
             break
-        # print("="*50)
-        # print(json.dumps(data_graph, indent=2))
-        # print("="*50)
-        # update figure
         update_fig(fig, axs, data_graph)
         # update index
         index += 1
@@ -405,6 +411,7 @@ def graph_plot():
     plt.close(fig)
 # create a sub-threading to send data given an ipc socket
 
+
 def _loop_tx(sock, *args):
     _retry_idx = 0
     while True:
@@ -417,15 +424,16 @@ def _loop_tx(sock, *args):
                 _buffer = b''
                 break
             continue
-    return _buffer,_retry_idx
+    return _buffer, _retry_idx
 
-def _blocking_wait(return_num,graph):
+
+def _blocking_wait(return_num, graph):
     return_num.release()
     for device_name, links in graph.graph.items():
         for link_name, streams in links.items():
             return_num._value -= 1
     return_num.acquire()
-    
+
 
 def _send_data(sock):
     global is_stop, system_return, throttle
@@ -439,7 +447,7 @@ def _send_data(sock):
 
         _buffer, _retry_idx = _loop_tx(sock, "statistics")
         # If the communication break unreasonably, close the socket
-        if _retry_idx == 3: 
+        if _retry_idx == 3:
             return_num.release()
             is_collect.clear()
             break
@@ -454,12 +462,13 @@ def _send_data(sock):
         is_control.wait()
         time.sleep(0.01)
         if sock.link_name in throttle.keys():
-            _buffer, _retry_idx = _loop_tx(sock,  "throttle", throttle[sock.link_name])
+            _buffer, _retry_idx = _loop_tx(
+                sock,  "throttle", throttle[sock.link_name])
             return_num.release()
-            if _retry_idx == 3: 
+            if _retry_idx == 3:
                 is_control.clear()
                 break
-            
+
         time.sleep(0.01)  # waiting for clear event
         is_control.clear()
     print("socket thread stopping")
@@ -477,7 +486,7 @@ def control_thread(graph, time_limit, period):
         is_collect.set()
 
         # wait until socket returns
-        _blocking_wait(return_num,graph)
+        _blocking_wait(return_num, graph)
 
         # update graph
         graph.update_graph(system_return)
@@ -486,12 +495,13 @@ def control_thread(graph, time_limit, period):
         extract_data_from_graph(graph, data_graph, control_times)
         is_draw.set()
 
-        ##=======================================================================##
-        this_throttle_fraction = update_throttle_fraction("one_dimensional_search", graph)
+        ## =======================================================================##
+        this_throttle_fraction = update_throttle_fraction(
+            "one_dimensional_search", graph)
         # update throttle
         port_throttle = graph.update_throttle(this_throttle_fraction)
-        ##=======================================================================##
-        
+        ## =======================================================================##
+
         # print(port_throttle)
         throttle.update(port_throttle)
 
@@ -499,7 +509,7 @@ def control_thread(graph, time_limit, period):
         is_control.set()
 
         # wait until socket returns
-        _blocking_wait(return_num,graph)
+        _blocking_wait(return_num, graph)
 
         control_times += 1
         time.sleep(period)
@@ -527,7 +537,7 @@ def set_manifest(graph):
         'stop': 10
     }
     for device_name, links in graph.graph.items():
-        
+
         for link_name, streams in links.items():
             # init stream
             _init_parameters = []
@@ -549,9 +559,9 @@ def set_manifest(graph):
             # write detailed to device
             for i, _parameter in enumerate(_init_parameters):
                 conn.batch(device_name, 'init_stream_para', {**_parameter,
-                        **{'stream_idx': i}})
+                                                             **{'stream_idx': i}})
                 print({**_parameter,
-                    **{'stream_idx': i}})
+                       **{'stream_idx': i}})
                 conn.executor.wait(0.01)
             conn.executor.wait(0.1).apply()
     pass
@@ -583,7 +593,7 @@ def _transmission_block(graph):
             prot, sender, receiver = link_name.split('_')
             ip_addr = graph.info_graph[receiver][prot+"_ip_addr"]
             conn.batch(sender, 'run-replay-client',
-                       {"target_addr": ip_addr, "duration": DURATION, "manifest_name": link_name+".json", "ipc-port": graph.info_graph[sender][link_name]["ipc_port"]},timeout = DURATION + 5)
+                       {"target_addr": ip_addr, "duration": DURATION, "manifest_name": link_name+".json", "ipc-port": graph.info_graph[sender][link_name]["ipc_port"]}, timeout=DURATION + 5)
 
     return conn.executor.wait(DURATION+2)
 
@@ -626,8 +636,8 @@ def start_testing_threading(graph):
         for link_name, streams in links.items():
             # start threads to send data
             prot, sender, receiver = link_name.split('_')
-            prot = "wlan"
-            # prot = "lo"
+            # prot = "wlan"
+            prot = "lo"
             ip_addr = graph.info_graph[sender][prot+"_ip_addr"]
             sock = ipc_socket(
                 ip_addr, graph.info_graph[device_name][link_name]["ipc_port"], local_port=graph.info_graph[device_name][link_name]["local_port"], link_name=link_name)
