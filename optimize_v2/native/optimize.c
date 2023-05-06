@@ -8,8 +8,8 @@
 static const float MIN_FRAC = 1E-4;
 static const float DISCOUNT = 0.6;
 
-float step_size = 0.0;
-float throttle_fraction = 0.0;
+static float step_size = 0.0;
+static float throttle_fraction = 0.0;
 
 static float calc_throttle_fraction(float step_size)
 {
