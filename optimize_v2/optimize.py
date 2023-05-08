@@ -31,11 +31,11 @@ def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
 
 ## ==================Constant parameter================================= ##
 DURATION = 10
-rx_DURATION = 10
+rx_DURATION = DURATION
 
-CONTROL_ON = False
+CONTROL_ON = True
 control_period = 0.5
-control_times = 9 / control_period
+control_times = (DURATION - 1) / control_period
 ## ==================Constant parameter================================= ##
 
 ## ==================threading parameter================================= ##
@@ -148,13 +148,13 @@ def get_scenario_1_graph():
     link4 = graph.ADD_LINK('PC', 'phone', 'wlan', 866.7)
 
     graph.ADD_STREAM(link1, port_number=list(range(5202, 5205)),
-                     file_name="file_75MB.npy", duration=[0, 10], thru=0)
+                     file_name="file_75MB.npy", duration=[0, DURATION ], thru=0)
 
     graph.ADD_STREAM(link1, port_number=6201, file_name="proj_6.25MB.npy", duration=[
-                     0, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=96, target_rtt=18)
+                     0, DURATION ], thru=name_to_thru("proj_6.25MB.npy"), tos=96, target_rtt=18)
 
     graph.ADD_STREAM(link2, port_number=6202, file_name="voice_0.05MB.npy", duration=[
-                     0, DURATION], thru=name_to_thru("voice_0.05MB.npy"), tos=192, target_rtt=40)
+                     0, DURATION ], thru=name_to_thru("voice_0.05MB.npy"), tos=192, target_rtt=40)
 
     # graph.ADD_STREAM(link3, port_number=6203, file_name="proj_6.25MB.npy", duration=[
     #                  0, DURATION], thru=name_to_thru("proj_6.25MB.npy"),tos=96, target_rtt=40)
@@ -465,7 +465,7 @@ def _send_data(sock):
         if is_stop:
             break
         # send data
-        print("start thread send")
+        # print("start thread send")
         # set up the retrying counter
 
         _buffer, _retry_idx = _loop_tx(sock, "statistics")
@@ -500,20 +500,32 @@ def _send_data(sock):
 # create a control_thread
 
 
-def control_thread(graph, time_limit, period):
+def control_thread(graph, time_limit, period, socks):
     # start control and collect data
     global is_stop, system_return, throttle, data_graph
     control_times = 0
     time.sleep(2)
+    # Start socket
+
+
     while control_times < time_limit:
         # start collection
-        is_collect.set()
 
         # wait until socket returns
-        _blocking_wait(return_num, graph)
+        # _blocking_wait(return_num, graph)
+        for sock in socks:
+            _buffer, _retry_idx = _loop_tx(sock, "statistics")
+            if _retry_idx == 3:
+                # delete sock
+                socks.remove(sock)
+            else:
+                link_return = json.loads(str(_buffer.decode()))
+                system_return.update({sock.link_name: link_return["body"]})
 
+        print(system_return)
         # update graph
         graph.update_graph(system_return)
+
 
         # plot data
         extract_data_from_graph(graph, data_graph, control_times)
@@ -528,16 +540,18 @@ def control_thread(graph, time_limit, period):
 
             # start control
             is_control.set()
-
-            # wait until socket returns
-            _blocking_wait(return_num, graph)
+            for sock in socks:
+                if sock.link_name in throttle.keys():
+                    _buffer, _retry_idx = _loop_tx(
+                        sock,  "throttle", throttle[sock.link_name])
+                    return_num.release()
+                    if _retry_idx == 3:
+                        socks.remove(sock)
 
         control_times += 1
         time.sleep(period)
-
     is_stop = True
-    time.sleep(1)
-    is_collect.set()
+    time.sleep(0.5)
     is_draw.set()
     print("main thread stopping")
 
@@ -628,7 +642,6 @@ def _calc_rtt(graph):
             for stream_name, stream in streams.items():
                 port, tos = stream_name.split('@')
                 if stream["thru"] != 0:
-                    print(stream_name)
                     conn.batch(sender, "read_rtt", {"port": port, "tos": tos})
     return conn.executor.wait(0.5)
 
@@ -648,11 +661,8 @@ def start_testing_threading(graph):
     # init_transmission thread
     tx_thread = threading.Thread(target=transmission_thread, args=(graph,))
 
-    # init control thread
-    control_t = threading.Thread(target=control_thread, args=(
-        graph, control_times, control_period,))
     # init socket thread
-    send_ts = []
+    socks = []
     for device_name, links in graph.graph.items():
         for link_name, streams in links.items():
             # start threads to send data
@@ -662,14 +672,15 @@ def start_testing_threading(graph):
             ip_addr = graph.info_graph[sender][prot+"_ip_addr"]
             sock = ipc_socket(
                 ip_addr, graph.info_graph[device_name][link_name]["ipc_port"], local_port=graph.info_graph[device_name][link_name]["local_port"], link_name=link_name)
-            send_ts.append(threading.Thread(target=_send_data, args=(sock,)))
+            socks.append(sock)
+        # init control thread
+    control_t = threading.Thread(target=control_thread, args=(
+        graph, control_times, control_period,socks))
     tx_thread.start()
     time.sleep(0.5)
     control_t.setDaemon(True)
     control_t.start()
-    for send_t in send_ts:
-        send_t.setDaemon(True)
-        send_t.start()
+
 
 
 def _sum_file_thru(outputs):
@@ -685,7 +696,6 @@ def _sum_file_thru(outputs):
 
 
 def _rtt_port_associate(graph, outputs):
-    print(outputs)
     rtt_value = {}
     idx = 0
     for device_name, links in graph.graph.items():
