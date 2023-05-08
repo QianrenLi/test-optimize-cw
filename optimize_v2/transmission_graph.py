@@ -164,6 +164,7 @@ class Graph:
         out_sorted_throttle = [float(x) for x in out_sorted_throttle]
 
         # out_sorted_throttle = self._update_throttle([mcs[key] for key in throttle], [thru[key] for key in throttle], fraction)
+        print("reset_flag",reset_flag)
         print("out_sorted_throttle",out_sorted_throttle)        
         for i, link_name in enumerate(throttle.keys()):
             throttle.update({link_name: out_sorted_throttle[i]})

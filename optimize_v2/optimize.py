@@ -30,12 +30,12 @@ def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
 ## =======================================================================##
 
 ## ==================Constant parameter================================= ##
-DURATION = 10
+DURATION = 15
 rx_DURATION = DURATION
 
 CONTROL_ON = True
-control_period = 0.5
-control_times = (DURATION - 1) / control_period
+control_period = 0.8
+control_times = (DURATION - 5) / control_period
 ## ==================Constant parameter================================= ##
 
 ## ==================threading parameter================================= ##
@@ -176,23 +176,23 @@ def get_scenario_2_graph():
     link4 = graph.ADD_LINK('PC', 'phone', 'p2p', 866.7)
     link5 = graph.ADD_LINK('PC', 'pad', 'p2p', 866.7)
 
-    graph.ADD_STREAM(link1, port_number=list(range(5201, 5203)),
-                     file_name="file_75MB.npy", duration=[0, 10], thru=0, tos=32)
-    graph.ADD_STREAM(link2, port_number=6201, file_name="voice_0.05MB.npy", duration=[
-                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=40)
+    # graph.ADD_STREAM(link1, port_number=list(range(5201, 5203)),
+    #                  file_name="file_75MB.npy", duration=[0, DURATION], thru=0, tos=32)
+    # graph.ADD_STREAM(link2, port_number=6201, file_name="voice_0.05MB.npy", duration=[
+    #                  0, DURATION], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=40)
 
-    graph.ADD_STREAM(link3, port_number=6202, file_name="voice_0.05MB.npy", duration=[
-                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=40)
+    # graph.ADD_STREAM(link3, port_number=6202, file_name="voice_0.05MB.npy", duration=[
+    #                  0, DURATION], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=40)
 
-    graph.ADD_STREAM(link4, port_number=6203, file_name="kb_0.125MB.npy", duration=[
-                     0, 10], thru=name_to_thru("kb_0.125MB.npy"), tos=128, target_rtt=40)
+    # graph.ADD_STREAM(link4, port_number=6203, file_name="kb_0.125MB.npy", duration=[
+    #                  0, DURATION], thru=name_to_thru("kb_0.125MB.npy"), tos=128, target_rtt=40)
 
-    graph.ADD_STREAM(link5, port_number=list(range(5206, 5208)),
-                     file_name="file_75MB.npy", duration=[0, 10], thru=0, tos=32)
-    graph.ADD_STREAM(link5, port_number=6204, file_name="kb_0.125MB.npy", duration=[
-                     0, 10], thru=name_to_thru("kb_0.125MB.npy"), tos=128, target_rtt=40)
-    graph.ADD_STREAM(link5, port_number=6205, file_name="proj_6.25MB.npy", duration=[
-                     0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=20)
+    graph.ADD_STREAM(link5, port_number=list(range(5206, 5211)),
+                     file_name="file_75MB.npy", duration=[0, DURATION], thru=0, tos=32)
+    # graph.ADD_STREAM(link5, port_number=6204, file_name="kb_0.125MB.npy", duration=[
+    #                  0, DURATION], thru=name_to_thru("kb_0.125MB.npy"), tos=128, target_rtt=40)
+    # graph.ADD_STREAM(link5, port_number=6205, file_name="proj_6.25MB.npy", duration=[
+    #                  0, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=20)
     return graph
 
 
@@ -442,10 +442,8 @@ def _loop_tx(sock, *args):
             _buffer = sock.ipc_communicate(*args)
             break
         except Exception as e:
+            print(e)
             _retry_idx += 1
-            if _retry_idx == 3:
-                _buffer = b''
-                break
             continue
     return _buffer, _retry_idx
 
@@ -514,15 +512,17 @@ def control_thread(graph, time_limit, period, socks):
         # wait until socket returns
         # _blocking_wait(return_num, graph)
         for sock in socks:
+            print("Start collect")
             _buffer, _retry_idx = _loop_tx(sock, "statistics")
-            if _retry_idx == 3:
-                # delete sock
-                socks.remove(sock)
-            else:
-                link_return = json.loads(str(_buffer.decode()))
-                system_return.update({sock.link_name: link_return["body"]})
 
-        print(system_return)
+            # if _retry_idx == 3:
+            #     # delete sock
+            #     socks.remove(sock)
+            # else:
+            link_return = json.loads(str(_buffer.decode()))
+            print("statistics return",_retry_idx,link_return)
+            system_return.update({sock.link_name: link_return["body"]})
+
         # update graph
         graph.update_graph(system_return)
 
@@ -544,16 +544,18 @@ def control_thread(graph, time_limit, period, socks):
                 if sock.link_name in throttle.keys():
                     _buffer, _retry_idx = _loop_tx(
                         sock,  "throttle", throttle[sock.link_name])
-                    return_num.release()
-                    if _retry_idx == 3:
-                        socks.remove(sock)
+                    
+                    print("throttle return", json.loads(str(_buffer.decode())))
+                    # if _retry_idx == 3:
+                    #     socks.remove(sock)
 
         control_times += 1
         time.sleep(period)
+    print("main thread stopping")
     is_stop = True
     time.sleep(0.5)
     is_draw.set()
-    print("main thread stopping")
+    print("main thread stopped")
 
 
 def set_manifest(graph):
@@ -615,10 +617,10 @@ def _transmission_block(graph):
                 port_num, tos = stream_name.split('@')
                 if "file" in stream["file_name"]:
                     conn.batch(receiver, 'outputs_throughput', {
-                               "port": port_num, "duration": rx_DURATION})
+                               "port": port_num, "duration": rx_DURATION}, timeout=DURATION + 5)
                 else:
                     conn.batch(receiver, 'outputs_throughput_jitter', {
-                               "port": port_num, "duration": rx_DURATION, "calc_rtt": "--calc-rtt", "tos": tos})
+                               "port": port_num, "duration": rx_DURATION, "calc_rtt": "--calc-rtt", "tos": tos}, timeout=DURATION + 5)
 
     conn.executor.wait(1)
     # start transmission
@@ -630,7 +632,7 @@ def _transmission_block(graph):
             conn.batch(sender, 'run-replay-client',
                        {"target_addr": ip_addr, "duration": DURATION, "manifest_name": link_name+".json", "ipc-port": graph.info_graph[sender][link_name]["ipc_port"]}, timeout=DURATION + 5)
 
-    return conn.executor.wait(DURATION+2)
+    return conn.executor.wait(DURATION+5)
 
 
 def _calc_rtt(graph):
@@ -648,14 +650,17 @@ def _calc_rtt(graph):
 
 def _loop_apply(conn):
     conn.fetch()
+    idx = 0
     while True:
         try:
+            print("try to apply", idx)
+            idx += 1
             outputs = conn.apply()
             return outputs
             break
-        except:
-            continue
-
+        except Exception as e:
+            print(e)
+            break
 
 def start_testing_threading(graph):
     # init_transmission thread
@@ -667,8 +672,8 @@ def start_testing_threading(graph):
         for link_name, streams in links.items():
             # start threads to send data
             prot, sender, receiver = link_name.split('_')
-            # prot = "wlan"
-            prot = "lo"
+            prot = "wlan"
+            # prot = "lo"
             ip_addr = graph.info_graph[sender][prot+"_ip_addr"]
             sock = ipc_socket(
                 ip_addr, graph.info_graph[device_name][link_name]["ipc_port"], local_port=graph.info_graph[device_name][link_name]["local_port"], link_name=link_name)
@@ -678,8 +683,7 @@ def start_testing_threading(graph):
         graph, control_times, control_period,socks))
     tx_thread.start()
     time.sleep(0.5)
-    control_t.setDaemon(True)
-    control_t.start()
+    # control_t.start()
 
 
 
@@ -725,7 +729,9 @@ def main(args):
     add_ipc_port(graph)
     graph.show()
     set_manifest(graph)
-    start_testing_threading(graph)
+    # start_testing_threading(graph)
+    transmission_thread(graph)
+    
 
     # push matlab plot to main thread
     graph_plot()
