@@ -41,20 +41,22 @@ class Graph:
         device_name = link_name.split('_')[1]
         del self.trans_graph[device_name][link_name]
 
-    def ADD_STREAM(self, link_name, port_number, file_name, thru, duration, tos=32, target_rtt=18):
+    def ADD_STREAM(self, link_name, port_number, file_name, thru, duration, tos=32, target_rtt=18, name = ''):
         # from link name to device name
         device_name = link_name.split('_')[1]
         if type(port_number) == list:
             for _port_number in port_number:
+                _name = name if name != '' else str(_port_number)+'@'+str(tos)
                 self.graph[device_name][link_name].update({str(_port_number)+'@'+str(tos): {
                                                           'file_name': file_name, 'thru': thru, 'throughput': '', "throttle": 0, 'duration': duration}})
                 self.info_graph[device_name][link_name].update(
-                    {str(_port_number)+'@'+str(tos): {"target_rtt": target_rtt}})
+                    {str(_port_number)+'@'+str(tos): {"target_rtt": target_rtt, 'name': _name}})
         else:
+            _name = name if name != '' else str(port_number)+'@'+str(tos)
             self.graph[device_name][link_name].update({str(port_number)+'@'+str(tos): {
                                                       'file_name': file_name, 'thru': thru, 'throughput': '', "throttle": 0, 'duration': duration}})
             self.info_graph[device_name][link_name].update(
-                {str(port_number)+'@'+str(tos): {"target_rtt": target_rtt}})
+                {str(port_number)+'@'+str(tos): {"target_rtt": target_rtt, 'name': _name}})
         pass
 
     def REMOVE_STREAM(self, link_name, port_number, tos=132):
