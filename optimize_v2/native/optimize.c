@@ -6,7 +6,7 @@
 #define MAX(a, b) (((a) < (b)) ? (b) : (a))
 
 static const float MIN_FRAC = 1E-4;
-static const float DISCOUNT = 0.6;
+static const float DISCOUNT = 0.5;
 
 static float step_size = 0.0;
 static float throttle_fraction = 0.0;
@@ -33,13 +33,13 @@ float update_throttle_fraction(int length, float const *const observed_rtt_list,
     {
         if (observed_rtt_list[i] > target_rtt_list[i])
         {
-            step_size = MIN(step_size, -step_size / 2);
+            step_size = MIN(step_size, -step_size / 1.1);
             goto out;
         }
     }
 
     // else, increase the control
-    step_size = MAX(step_size, -step_size / 2);
+    step_size = MAX(step_size, -step_size / 1.1);
 out:
     calc_throttle_fraction(step_size);
     return throttle_fraction;

@@ -30,12 +30,13 @@ def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
 ## =======================================================================##
 
 ## ==================Constant parameter================================= ##
-DURATION = 15
+_duration = 30
+DURATION = _duration + 8
 rx_DURATION = DURATION
 
 CONTROL_ON = True
-control_period = 0.8
-control_times = (DURATION - 5) / control_period
+control_period = 1
+control_times = (DURATION - 8) / control_period
 ## ==================Constant parameter================================= ##
 
 ## ==================threading parameter================================= ##
@@ -170,29 +171,29 @@ def get_scenario_2_graph():
     graph.ADD_DEVICE('phone')
     graph.ADD_DEVICE('pad')
 
-    link1 = graph.ADD_LINK('phone', 'PC', 'p2p', 866.7)
+    link1 = graph.ADD_LINK('phone', 'PC', 'p2p', 1048)
     link2 = graph.ADD_LINK('phone', 'PC', 'wlan', 866.7)
     link3 = graph.ADD_LINK('PC', 'phone', 'wlan', 866.7)
     link4 = graph.ADD_LINK('PC', 'phone', 'p2p', 866.7)
-    link5 = graph.ADD_LINK('PC', 'pad', 'p2p', 866.7)
+    link5 = graph.ADD_LINK('PC', 'pad', 'p2p', 1200)
 
-    # graph.ADD_STREAM(link1, port_number=list(range(5201, 5203)),
-    #                  file_name="file_75MB.npy", duration=[0, DURATION], thru=0, tos=32)
-    # graph.ADD_STREAM(link2, port_number=6201, file_name="voice_0.05MB.npy", duration=[
-    #                  0, DURATION], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=40)
-
-    # graph.ADD_STREAM(link3, port_number=6202, file_name="voice_0.05MB.npy", duration=[
-    #                  0, DURATION], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=40)
-
-    # graph.ADD_STREAM(link4, port_number=6203, file_name="kb_0.125MB.npy", duration=[
-    #                  0, DURATION], thru=name_to_thru("kb_0.125MB.npy"), tos=128, target_rtt=40)
-
-    graph.ADD_STREAM(link5, port_number=list(range(5206, 5211)),
+    graph.ADD_STREAM(link1, port_number=list(range(5201, 5206)),
                      file_name="file_75MB.npy", duration=[0, DURATION], thru=0, tos=32)
-    # graph.ADD_STREAM(link5, port_number=6204, file_name="kb_0.125MB.npy", duration=[
-    #                  0, DURATION], thru=name_to_thru("kb_0.125MB.npy"), tos=128, target_rtt=40)
-    # graph.ADD_STREAM(link5, port_number=6205, file_name="proj_6.25MB.npy", duration=[
-    #                  0, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=20)
+    graph.ADD_STREAM(link2, port_number=6201, file_name="voice_0.05MB.npy", duration=[
+                     0, DURATION], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=40)
+
+    graph.ADD_STREAM(link3, port_number=6202, file_name="voice_0.05MB.npy", duration=[
+                     0, DURATION], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=40)
+
+    graph.ADD_STREAM(link4, port_number=6203, file_name="kb_0.125MB.npy", duration=[
+                     0, DURATION], thru=name_to_thru("kb_0.125MB.npy"), tos=128, target_rtt=40)
+
+    graph.ADD_STREAM(link5, port_number=list(range(5206, 5209)),
+                     file_name="file_75MB.npy", duration=[0, DURATION], thru=0, tos=32)
+    graph.ADD_STREAM(link5, port_number=6204, file_name="kb_0.125MB.npy", duration=[
+                     0, DURATION], thru=name_to_thru("kb_0.125MB.npy"), tos=128, target_rtt=40)
+    graph.ADD_STREAM(link5, port_number=6205, file_name="proj_6.25MB.npy", duration=[
+                     0, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=20)
     return graph
 
 
@@ -579,7 +580,7 @@ def set_manifest(graph):
             # init stream
             _init_parameters = []
             conn.batch(device_name, 'init_stream', {
-                       'stream_num': len(streams), 'manifest_name': link_name+".json"}).wait(0.1).apply()
+                       'stream_num': len(streams), 'manifest_name': link_name+".json"}).wait(0.5).apply()
             # add detail to manifest
             for port_number, stream in streams.items():
                 parameter = parameter_template.copy()
@@ -599,8 +600,8 @@ def set_manifest(graph):
                                                              **{'stream_idx': i}})
                 print({**_parameter,
                        **{'stream_idx': i}})
-                conn.executor.wait(0.01)
-            conn.executor.wait(0.1).apply()
+                conn.executor.wait(0.5)
+            conn.executor.wait(0.5).apply()
     pass
 
 
@@ -683,7 +684,7 @@ def start_testing_threading(graph):
         graph, control_times, control_period,socks))
     tx_thread.start()
     time.sleep(0.5)
-    # control_t.start()
+    control_t.start()
 
 
 
@@ -729,8 +730,8 @@ def main(args):
     add_ipc_port(graph)
     graph.show()
     set_manifest(graph)
-    # start_testing_threading(graph)
-    transmission_thread(graph)
+    start_testing_threading(graph)
+    # transmission_thread(graph)
     
 
     # push matlab plot to main thread
