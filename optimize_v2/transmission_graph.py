@@ -18,6 +18,8 @@ def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
 class Graph:
     graph = {}
     info_graph = {}
+    sliding_window = []
+    threshold = 3
 
     def __init__(self):
         self.trans_graph = dict()
@@ -126,6 +128,11 @@ class Graph:
     def _init_allocated_times(sorted_mcs, sorted_thru, init_factor):
         allocated_times = 1 - sum( [sorted_thru[i]/sorted_mcs[i] for i in range(len(sorted_mcs))] )
         return allocated_times*init_factor
+
+    def _is_control(self):
+        _temp = sum(self.sliding_window)
+        flag = 0 if abs(_temp) < self.threshold else 1 if _temp >= self.threshold else -1
+        return flag
 
     def _link_to_port_throttle(self, link_throttle):
         port_throttle = {}

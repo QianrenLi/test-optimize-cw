@@ -37,6 +37,7 @@ rx_DURATION = DURATION
 CONTROL_ON = True
 control_period = 1
 control_times = (DURATION - 8) / control_period
+
 ## ==================Constant parameter================================= ##
 
 ## ==================threading parameter================================= ##
@@ -458,44 +459,6 @@ def _blocking_wait(return_num, graph):
     return_num.acquire()
 
 
-def _send_data(sock):
-    global is_stop, system_return, throttle
-    while True:
-        is_collect.wait()
-        if is_stop:
-            break
-        # send data
-        # print("start thread send")
-        # set up the retrying counter
-
-        _buffer, _retry_idx = _loop_tx(sock, "statistics")
-        # If the communication break unreasonably, close the socket
-        if _retry_idx == 3:
-            return_num.release()
-            is_collect.clear()
-            break
-
-        link_return = json.loads(str(_buffer.decode()))
-        # print(link_return)
-        with is_writing:
-            system_return.update({sock.link_name: link_return["body"]})
-            return_num.release()
-        is_collect.clear()
-
-        if CONTROL_ON:
-            is_control.wait()
-            time.sleep(0.01)
-            if sock.link_name in throttle.keys():
-                _buffer, _retry_idx = _loop_tx(
-                    sock,  "throttle", throttle[sock.link_name])
-                return_num.release()
-                if _retry_idx == 3:
-                    is_control.clear()
-                    break
-
-            time.sleep(0.01)  # waiting for clear event
-            is_control.clear()
-    print("socket thread stopping")
 
 # create a control_thread
 
@@ -516,18 +479,20 @@ def control_thread(graph, time_limit, period, socks):
         for sock in socks:
             print("Start collect")
             _buffer, _retry_idx = _loop_tx(sock, "statistics")
-
-            # if _retry_idx == 3:
-            #     # delete sock
-            #     socks.remove(sock)
-            # else:
             link_return = json.loads(str(_buffer.decode()))
+
             print("statistics return",_retry_idx,link_return)
             system_return.update({sock.link_name: link_return["body"]})
 
         # update graph
         graph.update_graph(system_return)
-
+        
+        # given a flag, to start or stop control
+        flag =  graph._is_control()
+        if flag == 0:
+            CONTROL_ON = False
+        else:
+            CONTROL_ON = True
 
         # plot data
         extract_data_from_graph(graph, data_graph, control_times)
@@ -548,8 +513,7 @@ def control_thread(graph, time_limit, period, socks):
                         sock,  "throttle", throttle[sock.link_name])
                     
                     print("throttle return", json.loads(str(_buffer.decode())))
-                    # if _retry_idx == 3:
-                    #     socks.remove(sock)
+
 
         control_times += 1
         time.sleep(period)
