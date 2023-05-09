@@ -14,9 +14,9 @@ static const float ERR_PCNT = 0.10;
 static const float INIT_STEP_SIZE = 0.1;
 
 enum FLAGS {
-    FLAG_STABLE = +1,
-    FLAG_RESET  = -1,
-    FLAG_NONE   = 0
+    FLAG_RESET_N = +1,
+    FLAG_RESET_P  = -1,
+    FLAG_STABLE   = 0
 };
 typedef struct _sliding_window
 {
@@ -40,9 +40,9 @@ static int sliding_window_check(sliding_window_t *window)
         _sum += window->queue[i];
     }
 
-    if      (_sum==WINDOW_SIZE)  { _flag = FLAG_STABLE; }
-    else if (_sum==-WINDOW_SIZE) { _flag = FLAG_RESET; }
-    else                         { _flag = FLAG_NONE; }
+    if      (_sum==WINDOW_SIZE)  { _flag = FLAG_RESET_N; }
+    else if (_sum==-WINDOW_SIZE) { _flag = FLAG_RESET_P; }
+    else                         { _flag = FLAG_STABLE; }
     return _flag;
 }
 
@@ -141,22 +141,28 @@ out:
     _flag = FLAG_STABLE;
     for (i = 0; i < length; i++)
     {
-        if (observed_rtt_list[i]>=target_rtt_list[i] || observed_rtt_list[i]<=target_rtt_list[i]*(1-ERR_PCNT) )
+        if (observed_rtt_list[i]>=target_rtt_list[i])
         {
-            _flag = FLAG_RESET;
+            _flag = FLAG_RESET_N;
             break;
         }
+        else if (observed_rtt_list[i]<=target_rtt_list[i]*(1-ERR_PCNT))
+        {
+            _flag = FLAG_RESET_P;
+        }
+        
     }
     // check sliding window continuity
     sliding_window_append(&condition, _flag);
     switch ( sliding_window_check(&condition) )
     {
         case FLAG_STABLE:
-            return 0.0;
-        case FLAG_RESET:
+            break;
+        case FLAG_RESET_P:
             step_size = INIT_STEP_SIZE;
             break;
-        case FLAG_NONE:
+        case FLAG_RESET_N:
+            step_size = -INIT_STEP_SIZE;
             break;
     }
 

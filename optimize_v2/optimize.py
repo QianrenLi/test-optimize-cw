@@ -107,13 +107,13 @@ def get_scenario_local_test():
     graph.ADD_STREAM(link1, port_number=list(range(5202, 5205)),
                      file_name="file_75MB.npy", duration=[0, DURATION], thru=0, name = "File")
     graph.ADD_STREAM(link1, port_number=6201, file_name="proj_6.25MB.npy", duration=[
-                     0, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=96, target_rtt= 0.4 , name = 'Proj')
+                     0, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=96, target_rtt= 0.3 , name = 'Proj')
 
     # graph.ADD_STREAM(link2, port_number=6202, file_name="voice_0.05MB.npy", duration=[
     #                  0, 10], thru=name_to_thru("voice_0.05MB.npy"))
 
     graph.ADD_STREAM(link3, port_number=6203, file_name="voice_0.05MB.npy", duration=[
-                     0, DURATION], thru=name_to_thru("voice_0.05MB.npy"), tos=96, target_rtt= 0.2,name = 'Delay Sensitive')
+                     0, DURATION], thru=name_to_thru("voice_0.05MB.npy"), tos=96, target_rtt= 0.1,name = 'Delay Sensitive')
 
     graph.associate_ip('PC', 'lo', '127.0.0.1')
     graph.associate_ip('phone', 'lo', '127.0.0.1')
