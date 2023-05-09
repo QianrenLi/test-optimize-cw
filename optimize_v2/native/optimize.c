@@ -23,12 +23,12 @@ typedef struct _sliding_window
     int ptr;
     int queue[WINDOW_SIZE];
 } sliding_window_t;
-static void sliding_window_append(sliding_window_t window, int val)
+static void sliding_window_append(sliding_window_t *window, int val)
 {
-    window.queue[ window.ptr ] = val;
-    window.ptr = (window.ptr + 1) % WINDOW_SIZE;
+    window->queue[ window->ptr ] = val;
+    window->ptr = (window->ptr + 1) % WINDOW_SIZE;
 }
-static int sliding_window_check(sliding_window_t window)
+static int sliding_window_check(sliding_window_t *window)
 {
     int i;
     int _sum;
@@ -37,7 +37,7 @@ static int sliding_window_check(sliding_window_t window)
     _sum = 0;
     for (i=0; i<WINDOW_SIZE; i++)
     {
-        _sum += window.queue[i];
+        _sum += window->queue[i];
     }
 
     if      (_sum==WINDOW_SIZE)  { _flag = FLAG_STABLE; }
@@ -148,8 +148,8 @@ out:
         }
     }
     // check sliding window continuity
-    sliding_window_append(condition, _flag);
-    switch ( sliding_window_check(condition) )
+    sliding_window_append(&condition, _flag);
+    switch ( sliding_window_check(&condition) )
     {
         case FLAG_STABLE:
             return 0.0;
