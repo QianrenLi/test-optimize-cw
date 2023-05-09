@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import ctypes
 from transmission_graph import Graph
 from tap import Connector
 from tap_pipe import ipc_socket
@@ -7,7 +6,6 @@ from tap_pipe import ipc_socket
 import threading
 import json
 import time
-import os
 import re
 import argparse
 import matplotlib.pyplot as plt
@@ -18,6 +16,9 @@ COLORS = plt.rcParams['axes.prop_cycle'].by_key(
 # ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w']
 
 ## =======================================================================##
+import ctypes
+import os
+os.system('make')
 NATIVE_MOD = ctypes.CDLL('./liboptimize.so')
 NATIVE_MOD.update_throttle_fraction.restype = ctypes.c_float
 NATIVE_MOD.update_throttle_fraction.argtypes = [
@@ -425,15 +426,18 @@ def graph_plot():
 # create a sub-threading to send data given an ipc socket
 
 
-def _throttle_calc(graph):
+def _throttle_calc(graph:Graph):
     global file_stream_nums
     # detect whether the num of file stream changes
     current_file_stream_nums = _update_file_stream_nums(graph)
     reset_flag =  file_stream_nums==0 and current_file_stream_nums!=0
     this_throttle_fraction = update_throttle_fraction("one_dimensional_search", graph)
     # update throttle
-    file_stream_nums = current_file_stream_nums
-    port_throttle = graph.update_throttle(this_throttle_fraction, reset_flag)
+    if this_throttle_fraction:
+        file_stream_nums = current_file_stream_nums
+        port_throttle = graph.update_throttle(this_throttle_fraction, reset_flag)
+    else:
+        port_throttle = None
     return port_throttle
     
 
@@ -486,33 +490,22 @@ def control_thread(graph, time_limit, period, socks):
 
         # update graph
         graph.update_graph(system_return)
-        
-        # given a flag, to start or stop control
-        flag =  graph._is_control()
-        if flag == 0:
-            CONTROL_ON = False
-        else:
-            CONTROL_ON = True
 
         # plot data
         extract_data_from_graph(graph, data_graph, control_times)
         is_draw.set()
         if CONTROL_ON:
-            ## =======================================================================##
-            port_throttle = _throttle_calc(graph)
-            ## =======================================================================##
+            if (port_throttle := _throttle_calc(graph)):
+                # print(port_throttle)
+                throttle.update(port_throttle)
 
-            # print(port_throttle)
-            throttle.update(port_throttle)
-
-            # start control
-            is_control.set()
-            for sock in socks:
-                if sock.link_name in throttle.keys():
-                    _buffer, _retry_idx = _loop_tx(
-                        sock,  "throttle", throttle[sock.link_name])
-                    
-                    print("throttle return", json.loads(str(_buffer.decode())))
+                # start control
+                is_control.set()
+                for sock in socks:
+                    if sock.link_name in throttle.keys():
+                        _buffer, _retry_idx = _loop_tx(
+                            sock,  "throttle", throttle[sock.link_name])
+                        print("throttle return", json.loads(str(_buffer.decode())))
 
 
         control_times += 1
@@ -685,7 +678,6 @@ def transmission_thread(graph):
 
 
 def main(args):
-    os.system('make')
     graph = get_graph(args.scenario)
     if args.scenario > 0:
         _ip_extract("wlan\\|p2p\\|wlp", graph)
