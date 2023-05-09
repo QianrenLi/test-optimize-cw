@@ -380,7 +380,7 @@ def update_throttle_fraction(algorithm_type, graph, **kwargs):
                     # comparing requirements, skip file
                     try:
                         target_rtt = graph.info_graph[device_name][link_name][stream_name]["target_rtt"]
-                        if graph.info_graph[device_name][link_name][stream_name]["active"] == True:
+                        if graph.info_graph[device_name][link_name][stream_name]["active"] == True and target_rtt not 0:
                             rtt_value = graph.graph[device_name][link_name][stream_name]["rtt"]
                             observed_rtt_list.append(rtt_value*1E3)
                             target_rtt_list.append(target_rtt)
