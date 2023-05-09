@@ -42,7 +42,7 @@ class Graph:
         device_name = link_name.split('_')[1]
         del self.trans_graph[device_name][link_name]
 
-    def ADD_STREAM(self, link_name, port_number, file_name, thru, duration, tos=32, target_rtt=18, name = ''):
+    def ADD_STREAM(self, link_name, port_number, file_name, thru, duration, tos=32, target_rtt=0, name = ''):
         # from link name to device name
         device_name = link_name.split('_')[1]
         if type(port_number) == list:

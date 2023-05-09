@@ -32,8 +32,11 @@ def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
 
 ## ==================Constant parameter================================= ##
 _duration = 30
-DURATION = _duration + 8
-rx_DURATION = DURATION
+START_POINT = 2
+control_period = 0.5
+
+DURATION = int(_duration + 8 + START_POINT * control_period)
+rx_DURATION = int(DURATION)
 
 CONTROL_ON = True
 control_period = 1
@@ -102,15 +105,15 @@ def get_scenario_local_test():
     link3 = graph.ADD_LINK('PC', 'phone', 'lo', 866.7)
 
     graph.ADD_STREAM(link1, port_number=list(range(5202, 5205)),
-                     file_name="file_75MB.npy", duration=[0, 10], thru=0, name = "File")
+                     file_name="file_75MB.npy", duration=[0, DURATION], thru=0, name = "File")
     graph.ADD_STREAM(link1, port_number=6201, file_name="proj_6.25MB.npy", duration=[
-                     0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=96, target_rtt=18 , name = 'Proj')
+                     0, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=96, target_rtt= 0.4 , name = 'Proj')
 
     # graph.ADD_STREAM(link2, port_number=6202, file_name="voice_0.05MB.npy", duration=[
     #                  0, 10], thru=name_to_thru("voice_0.05MB.npy"))
 
     graph.ADD_STREAM(link3, port_number=6203, file_name="voice_0.05MB.npy", duration=[
-                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=96, target_rtt=40,name = 'Delay Sensitive')
+                     0, DURATION], thru=name_to_thru("voice_0.05MB.npy"), tos=96, target_rtt= 0.2,name = 'Delay Sensitive')
 
     graph.associate_ip('PC', 'lo', '127.0.0.1')
     graph.associate_ip('phone', 'lo', '127.0.0.1')
@@ -289,11 +292,11 @@ def init_figure():
 
 def update_fig(fig, axs, data_graph):
     import numpy as np
+    global START_POINT
     [ax.clear() for ax in axs]
 
     idx_to_key = ["rtts", "thrus"]
     idx_to_names = ['RTT (unit: ms)', 'Throughput (unit: Mbps)']
-    start_point = 2
     for _idx in range(len(axs)):
         x_axs = [0, 1]
         y_axs = [0, 1]
@@ -303,10 +306,10 @@ def update_fig(fig, axs, data_graph):
             for link_name, streams in links.items():
                 for stream_name, stream in streams.items():
                     c = next(colors_iter)
-                    if len(stream["indexes"]) > start_point:
-                        vector_x = np.asarray(
-                            stream["indexes"][start_point:]) * control_period
-                        vector_y = stream[idx_to_key[_idx]][start_point:]
+                    if len(stream["indexes"]) > START_POINT:
+                        vector_x = (np.asarray(
+                            stream["indexes"][START_POINT:]) -  START_POINT) * control_period
+                        vector_y = stream[idx_to_key[_idx]][START_POINT:]
                         _line, = axs[_idx].plot(
                             range(len(stream["indexes"])), '.-', color=c)
                         _line.set_xdata(vector_x)
@@ -380,13 +383,14 @@ def update_throttle_fraction(algorithm_type, graph, **kwargs):
                     # comparing requirements, skip file
                     try:
                         target_rtt = graph.info_graph[device_name][link_name][stream_name]["target_rtt"]
-                        if graph.info_graph[device_name][link_name][stream_name]["active"] == True and target_rtt not 0:
+                        if graph.info_graph[device_name][link_name][stream_name]["active"] == True and target_rtt != 0:
                             rtt_value = graph.graph[device_name][link_name][stream_name]["rtt"]
                             observed_rtt_list.append(rtt_value*1E3)
                             target_rtt_list.append(target_rtt)
                     except:
                         continue
-                
+        print(observed_rtt_list)
+        print(target_rtt_list)
         length = len(observed_rtt_list)
         observed_rtt_list = _list_to_c_array(observed_rtt_list)
         target_rtt_list = _list_to_c_array(target_rtt_list)
@@ -506,7 +510,10 @@ def control_thread(graph, time_limit, period, socks):
                         _buffer, _retry_idx = _loop_tx(
                             sock,  "throttle", throttle[sock.link_name])
                         print("throttle return", json.loads(str(_buffer.decode())))
-
+            else:
+                print("=" * 50)
+                print("Control Stop")
+                print("=" * 50)
 
         control_times += 1
         time.sleep(period)
