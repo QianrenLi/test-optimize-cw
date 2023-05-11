@@ -2,21 +2,26 @@
 #include <stdio.h>
 #include "optimize.h"
 
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#define MAX(a, b) (((a) < (b)) ? (b) : (a))
+#define IS_RISE(x) (x > 0)
+#define IS_DOWN(x) (x < 0)
 
 // internal macros
 #define WINDOW_SIZE 3
 // internal constants
-static const float DISCOUNT = 0.5;
+static const float DISCOUNT = 0.6;
 static const float MIN_FRAC = 1E-4;
-static const float ERR_PCNT = 0.10;
+static const float ERR_PCNT = 0.20;
 static const float INIT_STEP_SIZE = 0.1;
 
 enum FLAGS {
-    FLAG_RESET_N = +1,
-    FLAG_RESET_P  = -1,
-    FLAG_STABLE   = 0
+    FLAG_EXIST_ABOVE    = +1,
+    Z_FLAG_EXIST_ABOVE  = +WINDOW_SIZE,
+    //
+    FLAG_ALL_BELOW   = -1,
+    Z_FLAG_ALL_BELOW = -WINDOW_SIZE,
+    //
+    FLAG_OTHERWISE      =  0,
+    Z_FLAG_OTHERWISE    =  0,
 };
 typedef struct _sliding_window
 {
@@ -40,16 +45,16 @@ static int sliding_window_check(sliding_window_t *window)
         _sum += window->queue[i];
     }
 
-    if      (_sum==WINDOW_SIZE)  { _flag = FLAG_RESET_N; }
-    else if (_sum==-WINDOW_SIZE) { _flag = FLAG_RESET_P; }
-    else                         { _flag = FLAG_STABLE; }
+    if      (_sum==+Z_FLAG_EXIST_ABOVE) { _flag = Z_FLAG_EXIST_ABOVE; }
+    else if (_sum==-Z_FLAG_ALL_BELOW)   { _flag = Z_FLAG_ALL_BELOW; }
+    else                                { _flag = Z_FLAG_OTHERWISE; }
     return _flag;
 }
 
 // internal static variables
 static float step_size = 0.0;
 static float throttle_fraction = 0.0;
-static sliding_window_t condition = { .ptr=0, .queue={0} };
+static sliding_window_t conditions = { .ptr=0, .queue={0} };
 
 /// @brief Coerce fraction between [MIN_FRAC, 1-MIN_FRAC].
 /// @param step_size internal step_size
@@ -124,46 +129,42 @@ float update_throttle_fraction(int length, float const *const observed_rtt_list,
     int i;
     int _flag;
 
-    // if all observed RTT are smaller than target RTT, then decrease control
+    // check and append current condition flag
+    _flag = FLAG_ALL_BELOW;
     for (i = 0; i < length; i++)
     {
         if (observed_rtt_list[i] > target_rtt_list[i])
         {
-            step_size = MIN(step_size, -step_size / 1.1);
-            goto out;
+            _flag = FLAG_EXIST_ABOVE;
+            break;
+        }
+        else if (observed_rtt_list[i] >= target_rtt_list[i]*(1-ERR_PCNT))
+        {
+            _flag = FLAG_OTHERWISE;
         }
     }
-    // else, increase the control
-    step_size = MAX(step_size, -step_size / 1.1);
+    sliding_window_append(&conditions, _flag);
 
-out:
-    // append +1/-1 to sliding window
-    _flag = FLAG_STABLE;
-    for (i = 0; i < length; i++)
+    // map from conditions to next step_size
+    switch ( sliding_window_check(&conditions) )
     {
-        if (observed_rtt_list[i]>=target_rtt_list[i])
-        {
-            _flag = FLAG_RESET_N;
+        case Z_FLAG_EXIST_ABOVE:                                            // ABNORMAL: step_size should reset to positive
+            step_size = +INIT_STEP_SIZE;
             break;
-        }
-        else if (observed_rtt_list[i]<=target_rtt_list[i]*(1-ERR_PCNT))
-        {
-            _flag = FLAG_RESET_P;
-        }
-        
-    }
-    // check sliding window continuity
-    sliding_window_append(&condition, _flag);
-    switch ( sliding_window_check(&condition) )
-    {
-        case FLAG_STABLE:
-            break;
-        case FLAG_RESET_P:
-            step_size = INIT_STEP_SIZE;
-            break;
-        case FLAG_RESET_N:
+        case Z_FLAG_ALL_BELOW:                                              // ABNORMAL: step_size should reset to negative
             step_size = -INIT_STEP_SIZE;
             break;
+        case Z_FLAG_OTHERWISE:                                              // OTHERWISE:
+            if (_flag==FLAG_EXIST_ABOVE)                                    //  step_size should > 0
+            {
+                if (IS_RISE(step_size)) { step_size = -step_size / 2.0; }
+                break;
+            }
+            else                                                            // step_size should < 0
+            {
+                if (IS_DOWN(step_size)) { step_size = -step_size / 2.0; }
+                break;
+            }
     }
 
     calc_throttle_fraction(step_size);
