@@ -45,9 +45,9 @@ static int sliding_window_check(sliding_window_t *window)
         _sum += window->queue[i];
     }
 
-    if      (_sum==+Z_FLAG_EXIST_ABOVE) { _flag = Z_FLAG_EXIST_ABOVE; }
-    else if (_sum==-Z_FLAG_ALL_BELOW)   { _flag = Z_FLAG_ALL_BELOW; }
-    else                                { _flag = Z_FLAG_OTHERWISE; }
+    if      (_sum==Z_FLAG_EXIST_ABOVE) { _flag = Z_FLAG_EXIST_ABOVE; }
+    else if (_sum==Z_FLAG_ALL_BELOW)   { _flag = Z_FLAG_ALL_BELOW; }
+    else                               { _flag = Z_FLAG_OTHERWISE; }
     return _flag;
 }
 
@@ -160,7 +160,7 @@ float update_throttle_fraction(int length, float const *const observed_rtt_list,
                 if (IS_RISE(step_size)) { step_size = -step_size / 2.0; }
                 break;
             }
-            else                                                            // step_size should < 0
+            else                                                            //  step_size should < 0
             {
                 if (IS_DOWN(step_size)) { step_size = -step_size / 2.0; }
                 break;
