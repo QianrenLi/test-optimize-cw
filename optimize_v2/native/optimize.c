@@ -2,8 +2,9 @@
 #include <stdio.h>
 #include "optimize.h"
 
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define IS_RISE(x) (x > 0)
-#define IS_DOWN(x) (x < 0)
+#define IS_FALL(x) (x < 0)
 
 // internal macros
 #define WINDOW_SIZE 3
@@ -20,8 +21,8 @@ enum FLAGS {
     FLAG_ALL_BELOW   = -1,
     Z_FLAG_ALL_BELOW = -WINDOW_SIZE,
     //
-    FLAG_OTHERWISE      =  0,
-    Z_FLAG_OTHERWISE    =  0,
+    FLAG_OTHERWISE   =  0,
+    Z_FLAG_OTHERWISE =  0,
 };
 typedef struct _sliding_window
 {
@@ -162,7 +163,7 @@ float update_throttle_fraction(int length, float const *const observed_rtt_list,
             }
             else                                                            //  step_size should < 0
             {
-                if (IS_DOWN(step_size)) { step_size = -step_size / 2.0; }
+                if (IS_FALL(step_size)) { step_size = -step_size / 2.0; }
                 break;
             }
     }
