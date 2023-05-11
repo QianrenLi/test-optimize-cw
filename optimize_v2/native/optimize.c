@@ -14,8 +14,8 @@ static const float ERR_PCNT = 0.20;
 static const float INIT_STEP_SIZE = 0.1;
 
 enum FLAGS {
-    FLAG_EXIST_ABOVE    = +1,
-    Z_FLAG_EXIST_ABOVE  = +WINDOW_SIZE,
+    FLAG_ANY_ABOVE   = +1,
+    Z_FLAG_ANY_ABOVE = +WINDOW_SIZE,
     //
     FLAG_ALL_BELOW   = -1,
     Z_FLAG_ALL_BELOW = -WINDOW_SIZE,
@@ -45,9 +45,9 @@ static int sliding_window_check(sliding_window_t *window)
         _sum += window->queue[i];
     }
 
-    if      (_sum==Z_FLAG_EXIST_ABOVE) { _flag = Z_FLAG_EXIST_ABOVE; }
-    else if (_sum==Z_FLAG_ALL_BELOW)   { _flag = Z_FLAG_ALL_BELOW; }
-    else                               { _flag = Z_FLAG_OTHERWISE; }
+    if      (_sum==Z_FLAG_ANY_ABOVE) { _flag = Z_FLAG_ANY_ABOVE; }
+    else if (_sum==Z_FLAG_ALL_BELOW) { _flag = Z_FLAG_ALL_BELOW; }
+    else                             { _flag = Z_FLAG_OTHERWISE; }
     return _flag;
 }
 
@@ -135,7 +135,7 @@ float update_throttle_fraction(int length, float const *const observed_rtt_list,
     {
         if (observed_rtt_list[i] > target_rtt_list[i])
         {
-            _flag = FLAG_EXIST_ABOVE;
+            _flag = FLAG_ANY_ABOVE;
             break;
         }
         else if (observed_rtt_list[i] >= target_rtt_list[i]*(1-ERR_PCNT))
@@ -148,14 +148,14 @@ float update_throttle_fraction(int length, float const *const observed_rtt_list,
     // map from conditions to next step_size
     switch ( sliding_window_check(&conditions) )
     {
-        case Z_FLAG_EXIST_ABOVE:                                            // ABNORMAL: step_size should reset to positive
-            step_size = +INIT_STEP_SIZE;
-            break;
-        case Z_FLAG_ALL_BELOW:                                              // ABNORMAL: step_size should reset to negative
+        case Z_FLAG_ANY_ABOVE:                                              // ABNORMAL: step_size should reset to negative
             step_size = -INIT_STEP_SIZE;
             break;
+        case Z_FLAG_ALL_BELOW:                                              // ABNORMAL: step_size should reset to positive
+            step_size = +INIT_STEP_SIZE;
+            break;
         case Z_FLAG_OTHERWISE:                                              // OTHERWISE:
-            if (_flag==FLAG_EXIST_ABOVE)                                    //  step_size should > 0
+            if (_flag==FLAG_ANY_ABOVE)                                      //  step_size should > 0
             {
                 if (IS_RISE(step_size)) { step_size = -step_size / 2.0; }
                 break;
