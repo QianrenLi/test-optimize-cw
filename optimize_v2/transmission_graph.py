@@ -11,6 +11,9 @@ NATIVE_MOD.fraction_to_throttle.argtypes = [
     ctypes.c_float, ctypes.c_int,
     ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float),
     ctypes.POINTER(ctypes.c_float) ]
+NATIVE_MOD.init_throttle_fraction.restype = ctypes.c_float
+NATIVE_MOD.init_throttle_fraction.argtypes = [
+    ctypes.c_int, ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float) ]
 def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
     return (arr_type * len(arr))(*arr)
 ##=======================================================================##
@@ -161,8 +164,10 @@ class Graph:
         ##
         if reset_flag:
             fraction = NATIVE_MOD.init_throttle_fraction(length, sorted_mcs, sorted_thru)
+
+        
         ##
-        NATIVE_MOD.fraction_to_throttle(fraction, length, sorted_mcs, sorted_thru,
+        NATIVE_MOD.fraction_to_throttle(ctypes.c_float(fraction), length, sorted_mcs, sorted_thru,
                                         out_sorted_throttle)
         out_sorted_throttle = [float(x) for x in out_sorted_throttle]
 

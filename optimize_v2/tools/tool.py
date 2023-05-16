@@ -25,7 +25,7 @@ NAME_MAP = {
     'real_port': '7_50MBps.npy'
 }
 
-if len(sys.argv) not in [4, 5, 10]:
+if len(sys.argv) not in [4, 5, 11]:
     print(len(sys.argv))
     print(sys.argv)
     print('Usage: python3 tool.py <key> <num> or python3 tool.py <key> <idx> <value>.')
@@ -85,7 +85,7 @@ elif len(sys.argv) == 5:
     with open(path, 'w') as f:
         json.dump(content, f, indent=4)
     ##
-elif len(sys.argv) == 10:
+elif len(sys.argv) == 11:
     with open(path, 'r') as f:
         content = json.load(f)
     ##
@@ -98,7 +98,7 @@ elif len(sys.argv) == 10:
         content['streams'][idx]['calc_rtt'] = eval(sys.argv[6])
         content['streams'][idx]['no_logging'] = eval(sys.argv[7])
         content['streams'][idx]['duration'] = [float(sys.argv[8]),float(sys.argv[9])]
-        
+        content['streams'][idx]['throttle'] = float(sys.argv[10])
         # print(eval(sys.argv[8]))
 
     ##

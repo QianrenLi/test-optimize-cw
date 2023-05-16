@@ -74,10 +74,11 @@
                 "calc_rtt": false,
                 "no_logging": false,
                 "start": 0,
-                "stop":10
+                "stop":10,
+                "throttle": 0
             },
             "commands": [
-                "cd tools; python3 tool.py $manifest_name $stream_idx $port $tos $file_name $calc_rtt $no_logging $start $stop"
+                "cd tools; python3 tool.py $manifest_name $stream_idx $port $tos $file_name $calc_rtt $no_logging $start $stop $throttle"
             ]
         },
         "set_priority":{

@@ -30,17 +30,21 @@ def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
     return (arr_type * len(arr))(*arr)
 ## =======================================================================##
 
-## ==================Constant parameter================================= ##
-_duration = 30
-START_POINT = 2
-control_period = 0.5
+## ==========================test======================================== ##
+heuristic_fraction = 0.1
+## ==========================test======================================== ##
 
-DURATION = int(_duration + 8 + START_POINT * control_period)
+## ==================Constant parameter================================= ##
+_duration = 40
+START_POINT = 0
+control_period = 0.8
+
+
+DURATION = int(_duration * 1.5 + START_POINT * control_period)
 rx_DURATION = int(DURATION)
 
 CONTROL_ON = True
-control_period = 1
-control_times = (DURATION - 8) / control_period
+control_times = (DURATION - _duration * 0.5) / control_period
 
 ## ==================Constant parameter================================= ##
 
@@ -95,10 +99,11 @@ def get_graph(scenario):
         return get_scenario_local_test()
 
 
+
 def get_scenario_local_test():
     graph = Graph()
-    graph.ADD_DEVICE('PC')
     graph.ADD_DEVICE('phone')
+    graph.ADD_DEVICE('PC')
 
     link1 = graph.ADD_LINK('phone', 'PC', 'lo', 1200)
     # link2 = graph.ADD_LINK('phone', 'PC', 'wlan', 866.7)
@@ -145,8 +150,8 @@ def get_scenario_test():
 
 def get_scenario_1_graph():
     graph = Graph()
-    graph.ADD_DEVICE('PC')
     graph.ADD_DEVICE('phone')
+    graph.ADD_DEVICE('PC')
 
     link1 = graph.ADD_LINK('phone', 'PC', 'p2p', 1200)
     link2 = graph.ADD_LINK('phone', 'PC', 'wlan', 866.7)
@@ -170,8 +175,8 @@ def get_scenario_1_graph():
 
 def get_scenario_2_graph():
     graph = Graph()
-    graph.ADD_DEVICE('PC')
     graph.ADD_DEVICE('phone')
+    graph.ADD_DEVICE('PC')
     graph.ADD_DEVICE('pad')
 
     link1 = graph.ADD_LINK('phone', 'PC', 'p2p', 1048)
@@ -202,8 +207,8 @@ def get_scenario_2_graph():
 
 def get_scenario_3_graph():
     graph = Graph()
-    graph.ADD_DEVICE('PC')
     graph.ADD_DEVICE('phone')
+    graph.ADD_DEVICE('PC')
     graph.ADD_DEVICE('pad')
     graph.ADD_DEVICE('TV')
 
@@ -213,26 +218,26 @@ def get_scenario_3_graph():
     link5 = graph.ADD_LINK('pad', 'TV', 'p2p', 866.7)
     link6 = graph.ADD_LINK('TV', 'pad', 'p2p', 866.7)
 
-    graph.ADD_STREAM(link1, port_number=list(range(5201, 5205)),
-                     file_name="file_75MB.npy", duration=[0, 10], thru=0, tos=32, name= 'File')
+    graph.ADD_STREAM(link1, port_number=list(range(5201, 5204)),
+                     file_name="file_75MB.npy", duration=[0, DURATION], thru=0, tos=32, name= 'File')
     graph.ADD_STREAM(link1, port_number=6201, file_name="proj_6.25MB.npy", duration=[
-                     0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=18, name= 'Proj')
+                     0, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=18, name= 'Proj')
 
     graph.ADD_STREAM(link2, port_number=6202, file_name="voice_0.05MB.npy", duration=[
-                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=40, name= 'Speaker A' )
+                     0, DURATION], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=40, name= 'Speaker A' )
 
     graph.ADD_STREAM(link3, port_number=6203, file_name="voice_0.05MB.npy", duration=[
-                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=40,  name= 'Mic A')
+                     0, DURATION], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=40,  name= 'Mic A')
 
     graph.ADD_STREAM(link5, port_number=6204, file_name="voice_0.05MB.npy", duration=[
-                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=25 ,name= 'Speaker B')
+                     0, DURATION], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=25 ,name= 'Speaker B')
     graph.ADD_STREAM(link5, port_number=6205, file_name="proj_6.25MB.npy", duration=[
-                     0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=20, name= 'Display')
+                     0, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=20, name= 'Display')
 
     graph.ADD_STREAM(link6, port_number=6206, file_name="voice_0.05MB.npy", duration=[
-                     0, 10], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=25, name= 'Mic B')
+                     0, DURATION], thru=name_to_thru("voice_0.05MB.npy"), tos=128, target_rtt=25, name= 'Mic B')
     graph.ADD_STREAM(link6, port_number=6207, file_name="proj_6.25MB.npy", duration=[
-                     0, 10], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=20, name= 'Camera')
+                     0, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=20, name= 'Camera')
     return graph
 
 
@@ -295,8 +300,8 @@ def update_fig(fig, axs, data_graph):
     global START_POINT
     [ax.clear() for ax in axs]
 
-    idx_to_key = ["rtts", "thrus"]
-    idx_to_names = ['RTT (unit: ms)', 'Throughput (unit: Mbps)']
+    idx_to_key = ["rtts", "throttles"]
+    idx_to_names = ['RTT (unit: ms)', "throttle (unit: Mbps)"]
     for _idx in range(len(axs)):
         x_axs = [0, 1]
         y_axs = [0, 1]
@@ -307,19 +312,24 @@ def update_fig(fig, axs, data_graph):
                 for stream_name, stream in streams.items():
                     c = next(colors_iter)
                     if len(stream["indexes"]) > START_POINT:
-                        vector_x = (np.asarray(
-                            stream["indexes"][START_POINT:]) -  START_POINT) * control_period
-                        vector_y = stream[idx_to_key[_idx]][START_POINT:]
-                        _line, = axs[_idx].plot(
-                            range(len(stream["indexes"])), '.-', color=c)
-                        _line.set_xdata(vector_x)
-                        _line.set_ydata(vector_y)
-                        legends.append(stream_name)
+                        if idx_to_key[_idx] in stream.keys():
+                            vector_x = (np.array(
+                                stream["indexes"][START_POINT:]) -  START_POINT) * control_period
+                            # if _idx == 0:
+                            #     vector_y = _conv_average(stream[idx_to_key[_idx]][START_POINT:])
+                            # else:
+                            vector_y = stream[idx_to_key[_idx]][START_POINT:]
 
-                        x_axs[0] = min(x_axs[0], min(vector_x))
-                        x_axs[1] = max(x_axs[1], max(vector_x))
-                        y_axs[0] = min(y_axs[0], min(vector_y))
-                        y_axs[1] = max(y_axs[1], max(vector_y))
+                            _line, = axs[_idx].plot(
+                                range(len(stream["indexes"])), '.-', color=c)
+                            _line.set_xdata(vector_x)
+                            _line.set_ydata(vector_y)
+                            legends.append(stream_name)
+
+                            x_axs[0] = min(x_axs[0], min(vector_x))
+                            x_axs[1] = max(x_axs[1], max(vector_x))
+                            y_axs[0] = min(y_axs[0], min(vector_y))
+                            y_axs[1] = max(y_axs[1], max(vector_y))
 
         axs[_idx].set_xlabel("time (s)")
         axs[_idx].set_ylabel(idx_to_names[_idx])
@@ -331,8 +341,19 @@ def update_fig(fig, axs, data_graph):
     fig.canvas.draw()
     fig.canvas.flush_events()
 
+# def _conv_average(vector):
+#     import numpy as np
+#     window_size = 3
+#     temp = []
+#     for idx in range(len(vector)):
+#         start_p = idx - window_size if idx >= window_size else 0
+#         temp_value = np.mean(vector[start_p: idx])
+#         temp.append(temp_value)
+#     return np.array(temp)
 
 def extract_data_from_graph(graph, data_graph, index):
+    global throttle
+    print("throttle",throttle)
     # Construct a temp graph
     for device_name, links in graph.graph.items():
         # update graph
@@ -342,6 +363,15 @@ def extract_data_from_graph(graph, data_graph, index):
             # update link
             if link_name not in data_graph[device_name].keys():
                 data_graph[device_name][link_name] = {}
+                
+            ## update throttle
+            prot, sender, receiver = link_name.split('_')
+            throttle_name = "throttle+" + sender+"+" + receiver   
+            if link_name in throttle.keys():
+                ## extract link name to devices             
+                if throttle_name not in data_graph[device_name][link_name].keys():
+                    data_graph[device_name][link_name][throttle_name] = {"indexes": [], "throttles": []}
+
             for stream_name, stream in streams.items():
                 # derive name from file name
                 _stream_name = graph.info_graph[device_name][link_name][stream_name]["name"]
@@ -364,6 +394,15 @@ def extract_data_from_graph(graph, data_graph, index):
                     except Exception as e:
                         print(e)
                         print("Data collect error",device_name, link_name, stream_name)
+                #==============================================================================#
+                    if link_name in throttle.keys() and "File" in _stream_name:
+                        if index in data_graph[device_name][link_name][throttle_name]["indexes"]:
+                            data_graph[device_name][link_name][throttle_name]["throttles"][-1] += throttle[link_name][stream_name]
+                        else:
+                            data_graph[device_name][link_name][throttle_name]["indexes"].append(
+                                index)
+                            data_graph[device_name][link_name][throttle_name]["throttles"].append(
+                                throttle[link_name][stream_name])
     pass
 
 
@@ -436,7 +475,9 @@ def _throttle_calc(graph:Graph):
     current_file_stream_nums = _update_file_stream_nums(graph)
     reset_flag =  file_stream_nums==0 and current_file_stream_nums!=0
     this_throttle_fraction = update_throttle_fraction("one_dimensional_search", graph)
+    # this_throttle_fraction = heuristic_fraction
     # update throttle
+    print("this_throttle_fraction",this_throttle_fraction)
     if this_throttle_fraction:
         file_stream_nums = current_file_stream_nums
         port_throttle = graph.update_throttle(this_throttle_fraction, reset_flag)
@@ -474,6 +515,7 @@ def _blocking_wait(return_num, graph):
 def control_thread(graph, time_limit, period, socks):
     # start control and collect data
     global is_stop, system_return, throttle, data_graph
+    # graph.update_throttle(0.1)
     control_times = 0
     time.sleep(2)
     # Start socket
@@ -495,9 +537,6 @@ def control_thread(graph, time_limit, period, socks):
         # update graph
         graph.update_graph(system_return)
 
-        # plot data
-        extract_data_from_graph(graph, data_graph, control_times)
-        is_draw.set()
         if CONTROL_ON:
             if (port_throttle := _throttle_calc(graph)):
                 # print(port_throttle)
@@ -514,9 +553,13 @@ def control_thread(graph, time_limit, period, socks):
                 print("=" * 50)
                 print("Control Stop")
                 print("=" * 50)
+        # plot data
+        extract_data_from_graph(graph, data_graph, control_times)
+        is_draw.set()
 
         control_times += 1
         time.sleep(period)
+
     print("main thread stopping")
     is_stop = True
     time.sleep(0.5)
@@ -537,7 +580,8 @@ def set_manifest(graph):
         'calc_rtt': False,
         'no_logging': True,
         'start': 0,
-        'stop': 10
+        'stop': 10,
+        'throttle': 0
     }
     for device_name, links in graph.graph.items():
 
@@ -556,6 +600,8 @@ def set_manifest(graph):
                 parameter.update({'file_name':  stream["file_name"]})
                 if "file" not in stream["file_name"]:
                     parameter.update({'calc_rtt': True})
+                else:
+                    parameter.update({'throttle': 0.1})
                 parameter.update({'start': stream['duration'][0]})
                 parameter.update({'stop': stream['duration'][1]})
                 _init_parameters.append(parameter)
@@ -610,7 +656,7 @@ def _calc_rtt(graph):
             for stream_name, stream in streams.items():
                 port, tos = stream_name.split('@')
                 if stream["thru"] != 0:
-                    conn.batch(sender, "read_rtt", {"port": port, "tos": tos})
+                    conn.batch(sender, "read_rtt", {"port": port, "tos": tos}).wait(0.1)
     return conn.executor.wait(0.5)
 
 
@@ -654,17 +700,19 @@ def start_testing_threading(graph,ctl_prot):
 def _sum_file_thru(outputs):
     thrus = 0
     outputs = [n for n in outputs if n]
+    print(outputs)
     for output in outputs:
         output = eval(output["file_thru"])
         if type(output) == float:
             thrus += output
         else:
-            thrus += float(output[1])
+            thrus += float(output[0])
     return thrus
 
 
 def _rtt_port_associate(graph, outputs):
     rtt_value = {}
+    rtt_list = []
     idx = 0
     for device_name, links in graph.graph.items():
         for link_name, streams in links.items():
@@ -673,7 +721,10 @@ def _rtt_port_associate(graph, outputs):
                 port, tos = stream_name.split('@')
                 if stream["thru"] != 0:
                     rtt_value.update({stream_name: float(outputs[idx]["rtt"])})
+                    rtt_list.append(float(outputs[idx]["rtt"]))
                     idx += 1
+    import numpy as np
+    print(np.round(np.array(rtt_list) * 1000,3))
     return rtt_value
 
 
@@ -685,6 +736,8 @@ def transmission_thread(graph):
 
 
 def main(args):
+    global heuristic_fraction
+    heuristic_fraction = args.fraction
     graph = get_graph(args.scenario)
     if args.scenario > 0:
         _ip_extract("wlan\\|p2p\\|wlp", graph)
@@ -707,6 +760,5 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-s', '--scenario', type=int,
                         default=1, help='scenario in 1,2,3')
-
     args = parser.parse_args()
     main(args)
