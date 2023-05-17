@@ -9,7 +9,7 @@
 // internal macros
 #define WINDOW_SIZE 3
 // internal constants
-static const float DISCOUNT = 0.5;
+static const float DISCOUNT = 0.6;
 static const float MIN_FRAC = 1E-4;
 static const float ERR_PCNT = 0.10;
 static const float STABLE_PCNT = 0.05;

@@ -43,10 +43,10 @@ heuristic_fraction = 0.1
 _duration = 40
 START_POINT = 0
 control_period = 0.8
-DURATION = int(_duration * 1.5 + START_POINT * control_period)
+DURATION = int(_duration * 1.7 + START_POINT * control_period)
 rx_DURATION = int(DURATION)
 CONTROL_ON = True
-control_times = (DURATION - _duration * 0.5) / control_period
+control_times = (DURATION - _duration * 0.7) / control_period
 experiment_name = 'test'
 ## ==================Constant parameter================================= ##
 
@@ -89,16 +89,23 @@ def name_to_thru(file_name):
     file_size = float(file_name.split('_')[1].split('MB')[0])
     return file_size
 
+def mean_filter(window_size, input_array):
+    import numpy as np
+    np_input_array = np.array(input_array)
+    filter_kernel = np.ones(np_input_array)/window_size
+    np_output_array = np.convolve(filter_kernel, np_input_array, 'same')
+    return np_output_array
 
-def get_graph(scenario):
+
+def get_graph(scenario, DURATION):
     if scenario == 1:
-        return tc.get_scenario_1_graph()
+        return tc.get_scenario_1_graph(DURATION)
     elif scenario == 2:
-        return tc.get_scenario_2_graph()
+        return tc.get_scenario_2_graph(DURATION)
     elif scenario == 3:
-        return tc.get_scenario_3_graph()
+        return tc.get_scenario_3_graph(DURATION)
     else:
-        return tc.get_scenario_local_test()
+        return tc.get_scenario_local_test(DURATION)
 
 
 def _ip_extract(keyword, graph):
@@ -147,9 +154,9 @@ def init_figure():
     axs = []
     fig = plt.figure(figsize=(12.8, 9.6))
     plt.ion()
-    subplot_num = 3
+    subplot_num = 2
     for _idx in range(subplot_num):
-        _ax = fig.add_subplot(311 + _idx)
+        _ax = fig.add_subplot(211 + _idx)
         # lines.append(_line)
         axs.append(_ax)
     return fig, axs
@@ -160,8 +167,8 @@ def update_fig(fig, axs, data_graph):
     global START_POINT
     [ax.clear() for ax in axs]
 
-    idx_to_key = ["rtts", "thrus" , "throttles"]
-    idx_to_names = ['RTT (unit: ms)','Throughput (unit: Mbps)', "throttle (unit: Mbps)"]
+    idx_to_key = ["rtts", "throttles"]
+    idx_to_names = ['RTT (unit: ms)', "throttle"]
     for _idx in range(len(axs)):
         x_axs = [0, 1]
         y_axs = [0, 1]
@@ -175,11 +182,10 @@ def update_fig(fig, axs, data_graph):
                         if idx_to_key[_idx] in stream.keys():
                             vector_x = (np.array(
                                 stream["indexes"][START_POINT:]) - START_POINT) * control_period
-                            # if _idx == 0:
-                            #     vector_y = _conv_average(stream[idx_to_key[_idx]][START_POINT:])
-                            # else:
-                            vector_y = stream[idx_to_key[_idx]][START_POINT:]
-
+                            if idx_to_key[_idx] == "rtts":
+                                vector_y = mean_filter(1,stream[idx_to_key[_idx]][START_POINT:])
+                            else:
+                                vector_y = stream[idx_to_key[_idx]][START_POINT:]
                             _line, = axs[_idx].plot(
                                 range(len(stream["indexes"])), '.-', color=c)
                             _line.set_xdata(vector_x)
@@ -189,7 +195,10 @@ def update_fig(fig, axs, data_graph):
                             x_axs[0] = min(x_axs[0], min(vector_x))
                             x_axs[1] = max(x_axs[1], max(vector_x))
                             y_axs[0] = min(y_axs[0], min(vector_y))
-                            y_axs[1] = max(y_axs[1], max(vector_y))
+                            if idx_to_key[_idx] == "rtts":
+                                y_axs[1] = min(max(y_axs[1], max(vector_y)),30)
+                            else:
+                                y_axs[1] = max(y_axs[1], max(vector_y))
 
         axs[_idx].set_xlabel("time (s)")
         axs[_idx].set_ylabel(idx_to_names[_idx])
@@ -250,13 +259,17 @@ def extract_data_from_graph(graph, data_graph, index):
                 # ==============================================================================#
                     if link_name in throttle.keys() and "File" in _stream_name:
                         if index in data_graph[device_name][link_name][throttle_name]["indexes"]:
-                            data_graph[device_name][link_name][throttle_name]["throttles"][-1] += throttle[link_name][stream_name]
+                            data_graph[device_name][link_name][throttle_name]["throttles"][-1] += 0
+                            
                         else:
                             data_graph[device_name][link_name][throttle_name]["indexes"].append(
                                 index)
                             data_graph[device_name][link_name][throttle_name]["throttles"].append(
-                                throttle[link_name][stream_name])
+                                this_throttle_fraction)
     pass
+
+
+
 
 
 def update_throttle_fraction(algorithm_type, graph, **kwargs):
@@ -324,7 +337,7 @@ def graph_plot():
 
 
 def _throttle_calc(graph: Graph):
-    global file_stream_nums
+    global file_stream_nums, this_throttle_fraction
     # detect whether the num of file stream changes
     current_file_stream_nums = _update_file_stream_nums(graph)
     reset_flag = file_stream_nums == 0 and current_file_stream_nums != 0
@@ -388,7 +401,6 @@ def control_thread(graph, time_limit, period, socks):
 
         # update graph
         graph.update_graph(system_return)
-
         if CONTROL_ON:
             if (port_throttle := _throttle_calc(graph)):
                 # print(port_throttle)
@@ -402,7 +414,16 @@ def control_thread(graph, time_limit, period, socks):
                             sock,  "throttle", throttle[sock.link_name])
                         print("throttle return", json.loads(
                             str(_buffer.decode())))
+                    else:
+                        _buffer, _retry_idx = _loop_tx(
+                            sock,  "throttle", {})
+                        print("send_throttle",sock.link_name )
+                        
             else:
+                for sock in socks:
+                    _buffer, _retry_idx = _loop_tx(
+                            sock,  "throttle", {})
+                    print("send_throttle",sock.link_name )
                 print("=" * 50)
                 print("Control Stop")
                 print("=" * 50)
@@ -553,16 +574,19 @@ def start_testing_threading(graph, ctl_prot):
 
 def _sum_file_thru(outputs):
     thrus = 0
-    outputs = [n for n in outputs if n]
-    print(outputs)
-    for output in outputs:
-        output = eval(output["file_thru"])
-        if type(output) == float:
-            thrus += output
-        else:
-            thrus += float(output[0])
-    return thrus
-
+    try:
+        outputs = [n for n in outputs if n]
+        print(outputs)
+        for output in outputs:
+            output = eval(output["file_thru"])
+            if type(output) == float:
+                thrus += output
+            else:
+                thrus += float(output[0])
+        return thrus
+    except Exception as e:
+        print(outputs)
+    return 0
 
 def _rtt_port_associate(graph, outputs):
     rtt_value = {}
@@ -592,13 +616,13 @@ def transmission_thread(graph):
 def main(args):
     global experiment_name
     experiment_name = args.experiment_name
-    graph = tc.get_scenario_3_graph(DURATION)
+    # graph = tc.scenario3(DURATION)
     # graph = tc.scenario3_add_proj(graph,DURATION)
     # graph = tc.scenario3_remove_proj(graph)
     # graph = tc.scenario3_add_file(graph,DURATION)
     # graph = tc.scenario3_add_interference()
     # graph = tc.scenario3_remove_interference()
-    # graph = get_graph(args.scenario)
+    graph = get_graph(args.scenario,DURATION)
     if args.scenario > 0:
         _ip_extract("wlan\\|p2p\\|wlp", graph)
         setup_ip(graph)

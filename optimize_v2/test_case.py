@@ -111,8 +111,8 @@ def get_scenario_3_graph(DURATION):
     link1 = graph.ADD_LINK('phone', 'PC', 'p2p', 1048)
     link2 = graph.ADD_LINK('phone', 'PC', 'wlan', 866.7)
     link3 = graph.ADD_LINK('PC', 'phone', 'wlan', 866.7)
-    link5 = graph.ADD_LINK('pad', 'TV', 'p2p', 866.7)
-    link6 = graph.ADD_LINK('TV', 'pad', 'p2p', 866.7)
+    link5 = graph.ADD_LINK('pad', 'TV', 'p2p', 1048)
+    link6 = graph.ADD_LINK('TV', 'pad', 'p2p', 1048)
 
     graph.ADD_STREAM(link1, port_number=list(range(5201, 5204)),
                      file_name="file_75MB.npy", duration=[0, DURATION], thru=0, tos=32, name= 'File')
@@ -148,11 +148,11 @@ def scenario3(DURATION):
     graph.ADD_DEVICE('pad')
     graph.ADD_DEVICE('TV')
 
-    link1 = graph.ADD_LINK('phone', 'PC', 'p2p', 866.7)
+    link1 = graph.ADD_LINK('phone', 'PC', 'p2p', 1048)
     link2 = graph.ADD_LINK('phone', 'PC', 'wlan', 866.7)
     link3 = graph.ADD_LINK('PC', 'phone', 'wlan', 866.7)
-    link5 = graph.ADD_LINK('pad', 'TV', 'p2p', 866.7)
-    link6 = graph.ADD_LINK('TV', 'pad', 'p2p', 866.7)
+    link5 = graph.ADD_LINK('pad', 'TV', 'p2p', 1048)
+    link6 = graph.ADD_LINK('TV', 'pad', 'p2p', 1048)
 
     graph.ADD_STREAM(link1, port_number=list(range(5201, 5204)),
                      file_name="file_75MB.npy", duration=[0, DURATION], thru=0, tos=32, name= 'File')
@@ -180,22 +180,21 @@ def scenario3(DURATION):
     return graph
 
 def scenario3_add_file(graph: Graph,DUARTION: int) -> Graph:
-    graph.ADD_STREAM('p2p_phone_PC', port_number=6208, file_name="file_75MB.npy", duration=[20,DUARTION], thru=0, tos=32, name= 'File')
+    graph.ADD_STREAM('p2p_phone_PC', port_number=6208, file_name="file_75MB.npy", duration=[20,DUARTION], thru=0, tos=32, name= 'Add-File')
     return graph
 
 def scenario3_add_proj(graph: Graph, DUARTION: int):
     graph.ADD_STREAM('p2p_phone_PC', port_number=6208, file_name="proj_6.25MB.npy", duration=[
-                     20, DUARTION], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=18, name= 'Add-Proj')    
+                     20, DUARTION], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt= 30, name= 'Add-Proj')    
     return graph
 
 def scenario3_add_interference(graph: Graph):
     return graph
 
 def scenario3_remove_proj(graph: Graph):
+    graph.REMOVE_STREAM('p2p_phone_PC', port_number=6201, tos=128)
     graph.ADD_STREAM('p2p_phone_PC', port_number=6208, file_name="proj_6.25MB.npy", duration=[
-                     0, 30], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=18, name= 'Removed-Proj')
-    graph.ADD_STREAM('p2p_pad_TV', port_number=6209, file_name="proj_6.25MB.npy", duration=[
-                    0, 30], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=18, name= 'Removed-Proj')  
+                     0, 30], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=18, name= 'Remove-Proj')
     return graph
 
 def scenario3_remove_interference(graph: Graph) -> Graph: 
