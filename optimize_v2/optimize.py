@@ -14,7 +14,7 @@ import argparse
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 COLORS = plt.rcParams['axes.prop_cycle'].by_key(
-)['color'] + list(mcolors.BASE_COLORS.keys())  # type: ignore
+)['color'] + list(mcolors.BASE_COLORS.keys()) + list(mcolors.CSS4_COLORS.keys())  # type: ignore
 # ['SteelBlue', 'DarkOrange', 'ForestGreen', 'Crimson', 'MediumPurple', 'RosyBrown', 'Pink', 'Gray', 'Olive', 'Turquoise']
 # ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w']
 
@@ -147,9 +147,9 @@ def init_figure():
     axs = []
     fig = plt.figure(figsize=(12.8, 9.6))
     plt.ion()
-    subplot_num = 2
+    subplot_num = 3
     for _idx in range(subplot_num):
-        _ax = fig.add_subplot(211 + _idx)
+        _ax = fig.add_subplot(311 + _idx)
         # lines.append(_line)
         axs.append(_ax)
     return fig, axs
@@ -160,8 +160,8 @@ def update_fig(fig, axs, data_graph):
     global START_POINT
     [ax.clear() for ax in axs]
 
-    idx_to_key = ["rtts", "throttles"]
-    idx_to_names = ['RTT (unit: ms)', "throttle (unit: Mbps)"]
+    idx_to_key = ["rtts", "thrus" , "throttles"]
+    idx_to_names = ['RTT (unit: ms)','Throughput (unit: Mbps)', "throttle (unit: Mbps)"]
     for _idx in range(len(axs)):
         x_axs = [0, 1]
         y_axs = [0, 1]
