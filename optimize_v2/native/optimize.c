@@ -9,17 +9,20 @@
 // internal macros
 #define WINDOW_SIZE 3
 // internal constants
-static const float DISCOUNT = 0.6;
+static const float DISCOUNT = 0.5;
 static const float MIN_FRAC = 1E-4;
-static const float ERR_PCNT = 0.20;
+static const float ERR_PCNT = 0.10;
+static const float STABLE_PCNT = 0.05;
 static const float INIT_STEP_SIZE = 0.1;
 
 enum FLAGS {
     FLAG_ANY_ABOVE   = +1,
     Z_FLAG_ANY_ABOVE = +WINDOW_SIZE,
     //
-    FLAG_ALL_BELOW   = -1,
-    Z_FLAG_ALL_BELOW = -WINDOW_SIZE,
+    FLAG_STABLE = -1,
+    //
+    FLAG_ALL_BELOW   = -2,
+    Z_FLAG_ALL_BELOW = -WINDOW_SIZE * 2,
     //
     FLAG_OTHERWISE   =  0,
     Z_FLAG_OTHERWISE =  0,
@@ -144,29 +147,47 @@ float update_throttle_fraction(int length, float const *const observed_rtt_list,
             _flag = FLAG_OTHERWISE;
         }
     }
-    sliding_window_append(&conditions, _flag);
-
-    // map from conditions to next step_size
-    switch ( sliding_window_check(&conditions) )
-    {
-        case Z_FLAG_ANY_ABOVE:                                              // ABNORMAL: step_size should reset to negative
-            step_size = -INIT_STEP_SIZE;
-            break;
-        case Z_FLAG_ALL_BELOW:                                              // ABNORMAL: step_size should reset to positive
-            step_size = +INIT_STEP_SIZE;
-            break;
-        case Z_FLAG_OTHERWISE:                                              // OTHERWISE:
-            if (_flag==FLAG_ANY_ABOVE)                                      //  step_size should > 0
+    if (_flag == FLAG_ALL_BELOW){
+        for (i = 0; i < length; i++)
+        {
+            if (observed_rtt_list[i] > target_rtt_list[i] *(1-STABLE_PCNT))
             {
-                if (IS_RISE(step_size)) { step_size = -step_size / 2.0; }
+                _flag = FLAG_STABLE;
                 break;
             }
-            else                                                            //  step_size should < 0
-            {
-                if (IS_FALL(step_size)) { step_size = -step_size / 2.0; }
-                break;
-            }
+        }
     }
+
+
+    sliding_window_append(&conditions, _flag);
+    // stable stopping
+    if (_flag == FLAG_STABLE){
+        step_size = 0.0;
+    }
+    else{
+        // map from conditions to next step_size
+        switch ( sliding_window_check(&conditions) )
+        {
+            case Z_FLAG_ANY_ABOVE:                                              // ABNORMAL: step_size should reset to negative
+                step_size = -INIT_STEP_SIZE;
+                break;
+            case Z_FLAG_ALL_BELOW:                                              // ABNORMAL: step_size should reset to positive
+                step_size = +INIT_STEP_SIZE;
+                break;
+            case Z_FLAG_OTHERWISE:                                              // OTHERWISE:
+                if (_flag==FLAG_ANY_ABOVE)                                      //  step_size should > 0
+                {
+                    if (IS_RISE(step_size)) { step_size = -step_size / 2.0; }
+                    break;
+                }
+                else                                                            //  step_size should < 0
+                {
+                    if (IS_FALL(step_size)) { step_size = -step_size / 2.0; }
+                    break;
+                }
+        }
+    }
+    
 
     calc_throttle_fraction(step_size);
     return throttle_fraction;
