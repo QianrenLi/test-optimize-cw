@@ -168,7 +168,7 @@ def update_fig(fig, axs, data_graph):
     [ax.clear() for ax in axs]
 
     idx_to_key = ["rtts", "throttles"]
-    idx_to_names = ['RTT (unit: ms)', "throttle"]
+    idx_to_names = ['RTT (unit: ms)', "Fraction"]
     for _idx in range(len(axs)):
         x_axs = [0, 1]
         y_axs = [0, 1]
