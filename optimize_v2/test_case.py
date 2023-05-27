@@ -200,6 +200,18 @@ def scenario3_remove_proj(graph: Graph):
 def scenario3_remove_interference(graph: Graph) -> Graph: 
     return graph
 
+def cw_test_case(graph:Graph, DURATION) -> Graph:
+    graph = Graph()
+    graph.ADD_DEVICE('phone')
+    graph.ADD_DEVICE('PC')    
+    link1 = graph.ADD_LINK('phone', '', 'wlan', 866.7)
+    link2 = graph.ADD_LINK('PC', '', 'wlan', 866.7)
+    graph.ADD_STREAM(link1, port_number=6201, file_name="proj_6.25MB.npy", duration=[
+                     0, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=18, name= 'Proj')
+
+    graph.ADD_STREAM(link2, port_number=6201, file_name="proj_6.25MB.npy", duration=[
+                     0, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=18, name= 'Proj')   
+    return graph
 
 if __name__ == '__main__':
     graph = scenario3(40)

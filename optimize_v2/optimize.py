@@ -385,10 +385,20 @@ def control_thread(graph, time_limit, period, socks):
     # graph.update_throttle(0.1)
     control_times = 0
     # Start socket
-
+    _counter = 0
+    _cw_counter = 0
+    _cw_period = 10
+    conn = Connector()
     while control_times < time_limit:
+        ##==========================Test Code=================================##
+        _counter += 1
+        if _counter % _cw_period == 0:
+            _counter = 0
+            _cw_counter += 1
+            edca_params = edca_default_params(graph, 1, 15 * _cw_counter)
+            set_edca_parameter(conn, edca_params, "PC")
+        ##==========================Test Code=================================##
         # start collection
-
         # wait until socket returns
         # _blocking_wait(return_num, graph)
         for sock in socks:
@@ -440,10 +450,20 @@ def control_thread(graph, time_limit, period, socks):
     is_draw.set()
     print("main thread stopped")
 
-
-def set_edca_parameter(conn,params, graph):
+def edca_default_params(graph, ac, cw_min):
+    params = {}
     for device_name, links in graph.graph.items():
-        conn.batch(device_name, 'modify_edca', params[device_name])
+        params[device_name] = {
+            'ac': ac,
+            'cw_min': cw_min,
+            'cw_max': cw_min,
+            'aifs': -1
+        }
+    return params
+
+
+def set_edca_parameter(conn, params, device_name):
+    conn.batch(device_name, 'modify_edca', params[device_name])
     conn.executor.wait(1)
     _loop_apply(conn)
     return conn
