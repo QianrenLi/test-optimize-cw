@@ -196,6 +196,18 @@
                     "format":"(.*)"
                 }
             }
+        },
+        "modify_edca":{
+            "description": "Modify edca value",
+            "parameters":{
+                "ac": 3,
+                "cw_min": -1,
+                "cw_max": -1,
+                "aifs": -1
+            },
+            "commands": [
+                "cd wlsops-hack; python3 modify_edca.py --ac $ac --cw-min $cw_min --cw-max $cw_max --aifs $aifs"
+            ]
         }
     }
 }

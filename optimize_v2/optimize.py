@@ -441,6 +441,14 @@ def control_thread(graph, time_limit, period, socks):
     print("main thread stopped")
 
 
+def set_edca_parameter(conn,params, graph):
+    for device_name, links in graph.graph.items():
+        conn.batch(device_name, 'modify_edca', params[device_name])
+    conn.executor.wait(1)
+    _loop_apply(conn)
+    return conn
+
+
 def set_manifest(graph):
     conn = Connector()
     # graph = Graph()
