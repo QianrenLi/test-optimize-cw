@@ -206,7 +206,7 @@
                 "aifs": -1
             },
             "commands": [
-                "cd wlsops-hack; python3 modify_edca.py --ac $ac --cw-min $cw_min --cw-max $cw_max --aifs $aifs"
+                "cd wlsops-hack; sudo python3 modify_edca.py --ac $ac --cw-min $cw_min --cw-max $cw_max --aifs $aifs"
             ]
         }
     }
