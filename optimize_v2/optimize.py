@@ -579,22 +579,25 @@ def control_thread(graph, time_limit, period, socks):
         # update graph
         graph.update_graph(system_return)
         # DQN update and control
-        wlanController.update_graph(graph)
-        if state is not None:
-            state_ = wlanController.get_state()
-        else:
-            state = wlanController.get_state()
+        try:
+            wlanController.update_graph(graph)
+            if state is not None:
+                state_ = wlanController.get_state()
+            else:
+                state = wlanController.get_state()
 
-        if state_ is not None:
-            cost = wlanController.get_cost(his_fraction)
-            wlanController.store_transition(state, action_idx, cost, state_)
-            state = state_
+            if state_ is not None:
+                cost = wlanController.get_cost(his_fraction)
+                wlanController.store_transition(state, action_idx, cost, state_)
+                state = state_
 
-        controls, action_idx = wlanController.action_to_control(state)
-        print(controls)
-        print("training_counter", wlanController.training_counter)
-        his_fraction = controls["fraction"]
-        heuristic_fraction = his_fraction
+            controls, action_idx = wlanController.action_to_control(state)
+            print(controls)
+            print("training_counter", wlanController.training_counter)
+            his_fraction = controls["fraction"]
+            heuristic_fraction = his_fraction
+        except Exception as e:
+            print(e)
         ##
         if CONTROL_ON:
             if (port_throttle := _throttle_calc(graph)):
