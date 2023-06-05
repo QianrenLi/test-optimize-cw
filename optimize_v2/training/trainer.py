@@ -9,22 +9,25 @@ class Net(nn.Module):
     def __init__(self, states, hidden_states, actions):
         super(Net, self).__init__()
         self.query = nn.Linear(states, hidden_states)
-        self.key = nn.Linear(states, hidden_states)
-        self.value = nn.Linear(states, hidden_states)
+        # self.key = nn.Linear(states, hidden_states)
+        # self.value = nn.Linear(states, hidden_states)
+        self.fc1 = nn.Linear(hidden_states, hidden_states)
         self.fc = nn.Linear(hidden_states, actions)
-        self.normal_factor = 1/np.sqrt(hidden_states)
+        # self.normal_factor = 1/np.sqrt(hidden_states)
 
     def forward(self, x):
         temp_q = self.query(x)
-        temp_k = self.key(x)
-        temp_v = self.value(x)
+        # temp_k = self.key(x)
+        # temp_v = self.value(x)
+        for i in range(10):
+            temp_q = self.fc1(temp_q)
+        # self.attention_weights = nn.Softmax(dim=-1)(torch.bmm(
+        #     temp_q, temp_k.permute(0, 2, 1)))*self.normal_factor
 
-        self.attention_weights = nn.Softmax(dim=-1)(torch.bmm(
-            temp_q, temp_k.permute(0, 2, 1)))*self.normal_factor
+        # temp_hidden = torch.bmm(self.attention_weights, temp_v)
+        
 
-        temp_hidden = torch.bmm(self.attention_weights, temp_v)
-
-        return F.relu(self.fc(temp_hidden))
+        return F.relu(self.fc(temp_q))
 
 
 # define the controller for training
@@ -37,11 +40,17 @@ class DQNController():
         self.gamma = gamma
         self.batch_size = batch_size
         self.memory_size = memory_size
+
+        self.action_counter = 0
+        self.train_counter  = 0
+        self.memory_counter = 0
+        self.train_counter_max = 50
+
         self.memory = np.zeros(
             (memory_size, state_size * 2 + self.action_num + 1))
-        self.eval_net = Net(state_size, state_size * 2, self.action_size)
-        self.action_net = Net(state_size, state_size * 2, self.action_size)
-        self.eval_opt = torch.optim.Adam(self.eval_net.parameters(), lr=0.001)
+        self.eval_net = Net(state_size, state_size * 100, self.action_size)
+        self.action_net = Net(state_size, state_size * 100, self.action_size)
+        self.eval_opt = torch.optim.Adam(self.eval_net.parameters(), lr=0.0001)
         self.criterion = nn.MSELoss()
 
     def set_network(self, eval_net: nn.Module, action_net: nn.Module):
@@ -56,7 +65,7 @@ class DQNController():
 
     def _extract_action(self, batch_size ,tensor_action):
         np_extracted_action = np.zeros(
-            (batch_size, self.action_num), dtype=np.int32)
+            (batch_size, self.action_num))
         np_action_index = np.zeros(
             (batch_size, self.action_num), dtype=np.int32)
 
@@ -76,17 +85,17 @@ class DQNController():
         print('state',state)
         state = torch.tensor(state.reshape((1,1,self.state_size)), dtype= torch.float)
         actions = self.action_net(state).detach().numpy()
-        if np.random.rand() <= 0.9:
+        epsilon = min(self.action_counter / 100,0.9)
+        if np.random.rand() <= epsilon:
             self.action, action_idx = self._extract_action(1,actions)
         else:
             index = list(np.random.randint([len(i) for i in self.action_space]))
             action_idx = np.array([index])
             self.action = np.array([[self.action_space[i][index[i]] for i in range(len(index))]])
+        self.action_counter += 1
         return self.action, action_idx
 
     def store_transition(self, state, action, cost, state_):
-        if not hasattr(self, 'memory_counter'):
-            self.memory_counter = 0
         transition = np.hstack((state, action, cost, state_))
         index = self.memory_counter % self.memory_size
         self.memory[index, :] = transition
@@ -133,20 +142,30 @@ class DQNController():
         _, action_idx = self._extract_action(self.batch_size,q_action_next)
         q_target = self._action_tensor_formatting(
             cost, q_action_next, action_idx)
-        # zero gradient
-        self.eval_opt.zero_grad()
 
+        self.train_counter += 1
+        
         # back propagate
         loss = self.criterion(q_eval, q_target)
+        # zero gradient
+        self.eval_opt.zero_grad()
         loss.backward()
 
         # update network
         self.eval_opt.step()
+        if self.train_counter >= self.train_counter_max:
+            self.train_counter = 0
+            self.parameter_replace()
+            print("Parameter replace")
+        print("loss\t",loss.item())
         return loss.item()
 
     def parameter_replace(self):
-        for action_param, param in zip(self.action_net.parameters(), self.eval_net.parameters()):
-            action_param.data.copy_(param.data)
+        self.action_net.load_state_dict(self.eval_net.state_dict())
+    
+        # for action_param, param in zip(self.action_net.parameters(), self.eval_net.parameters()):
+        #     print("action_param",action_param)
+        #     print("param",param)
 
 
 if __name__ == '__main__':

@@ -9,7 +9,8 @@
         "tool":"tools/*",
         "cargo_lock":"stream-replay/Cargo.lock",
         "cargo_toml":"stream-replay/Cargo.toml",
-        "tap_file":"tap.py"
+        "tap_file":"tap.py",
+        "modifier":"wlsops-hack/modify_edca.py"
     },
     "functions": {
         "outputs_throughput": {

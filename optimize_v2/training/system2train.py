@@ -27,7 +27,8 @@ class wlanDQNController(DQNController):
                     state_size += 1
                     if "file" in stream["file_name"]:
                         action_space.append(file_levels)
-                    action_space.append(cw_levels)
+                    else:
+                        action_space.append(cw_levels)
         super().__init__(state_size, action_space, memory_size, batch_size, gamma)
 
     def update_graph(self,graph):
@@ -40,9 +41,9 @@ class wlanDQNController(DQNController):
         for device_name, links in self.graph.graph.items():
             for link_name, streams in links.items():
                 for stream_name, stream in streams.items():
-                    if "file" in stream["file_name"]:
-                        state.append(stream["rtt"])
-                    throughput += stream["throughput"]
+                    if "file" not in stream["file_name"]:
+                        state.append(stream["rtt"] * 1000)
+                    throughput += stream["rtt"] * 1000
         state.append(throughput) #TODO: let the throttle to be the system state
         return np.array(state)
 
@@ -60,8 +61,9 @@ class wlanDQNController(DQNController):
                 for stream_name, stream in streams.items():
                     if "file" in stream["file_name"]:
                         control.update({"fraction":action[idx]})
-                        idx += 1
-                    control.update({device_name:action[idx]})       
+                        # idx += 1
+                    else:
+                        control.update({device_name:action[idx]})       
                     idx += 1
         return control,action_idx
 
@@ -71,8 +73,11 @@ class wlanDQNController(DQNController):
         for device_name, links in self.graph.graph.items():
             for link_name, streams in links.items():
                 for stream_name, stream in streams.items():
-                    cost += stream["rtt"]
-        cost -= fraction * 60
+                    target_rtt = self.graph.info_graph[device_name][link_name][stream_name]["target_rtt"]
+                    if target_rtt != 0:
+                        cost += abs(stream["rtt"] * 1000 - target_rtt)
+                    # cost += stream["rtt"] * 1000
+        # cost -= fraction * 60
         return cost
 
     def store_params(self,path):

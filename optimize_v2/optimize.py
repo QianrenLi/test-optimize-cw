@@ -41,7 +41,7 @@ heuristic_fraction = 0.1
 
 
 ## ==================Constant parameter================================== ##
-_duration = 40
+_duration = 300
 START_POINT = 0
 control_period = 0.8
 DURATION = int(_duration * 1.7 + START_POINT * control_period)
@@ -57,6 +57,7 @@ is_control = threading.Event()
 is_collect = threading.Event()
 is_draw = threading.Event()
 is_writing = threading.Lock()
+is_network_use = threading.Event()
 is_stop = False
 return_num = threading.Semaphore(0)
 ## ==================threading parameter================================= ##
@@ -71,6 +72,7 @@ name_dict = {'throughput': 'thru'}
 
 ## =======================DQN Controller================================= ##
 wlanController = None
+cost_f = open(f"./training/logs/log-cost{time.ctime()}.txt", 'a+')
 ## =======================DQN Controller================================= ##
 ##
 
@@ -262,20 +264,21 @@ def _get_graph(scenario, DURATION):
 def _edca_default_params(graph, ac, controls):
     params = {}
     for device_name, links in graph.graph.items():
-        params[device_name] = {
-            'ac': ac,
-            'cw_min': controls[device_name],
-            'cw_max': controls[device_name],
-            'aifs': -1
-        }
+        if device_name in controls:
+            params[device_name] = {
+                'ac': ac,
+                'cw_min': int(controls[device_name]),
+                'cw_max': int(controls[device_name]),
+                'aifs': -1
+            }
     return params
 
 
-def _set_edca_parameter(conn, params):
+def _set_edca_parameter(conn:Connector, params):
     for device_name in params:
         conn.batch(device_name, 'modify_edca', params[device_name])
-    conn.executor.wait(1)
-    _loop_apply(conn)
+        conn.executor.wait(0.01)
+    conn.executor.wait(0.01).apply()
     return conn
 
 
@@ -312,6 +315,7 @@ def _set_manifest(graph):
                 parameter.update({'file_name':  stream["file_name"]})
                 if "file" not in stream["file_name"]:
                     parameter.update({'calc_rtt': True})
+                    parameter.update({'no_logging': False})
                 else:
                     parameter.update({'throttle': 30})
                 parameter.update({'start': stream['duration'][0]})
@@ -389,7 +393,7 @@ def _update_fig(fig, axs, data_graph):
                             y_axs[0] = min(y_axs[0], min(vector_y))
                             if idx_to_key[_idx] == "rtts":
                                 y_axs[1] = min(
-                                    max(y_axs[1], max(vector_y)), 30)
+                                    max(y_axs[1], max(vector_y)), 60)
                             else:
                                 y_axs[1] = max(y_axs[1], max(vector_y))
 
@@ -504,7 +508,7 @@ def _throttle_calc(graph: Graph):
     #     "one_dimensional_search", graph)
     this_throttle_fraction = heuristic_fraction
     # update throttle
-    print("this_throttle_fraction", this_throttle_fraction)
+    # print("this_throttle_fraction", this_throttle_fraction)
     if this_throttle_fraction:
         file_stream_nums = current_file_stream_nums
         port_throttle = graph.update_throttle(
@@ -543,15 +547,22 @@ def transmission_thread(graph):
 
 
 def DQN_training_thread():
+    import torch
     global is_stop, wlanController
     while True:
         if is_stop:
             break
-        if wlanController.memory_size > 10:
+        is_network_use.wait()
+        if wlanController.memory_counter > 40:
             wlanController.training_network()
-        time.sleep(0.5)
-    wlanController.store_params("temp/temp_params.pkl")
-
+            time.sleep(0.01)
+        else:
+            time.sleep(0.5)
+            # print("training_thread",wlanController.memory_counter)
+        
+        if wlanController.training_counter % 300 == 0:
+            torch.save(wlanController.eval_net.state_dict(), "./temp/temp2.pkl")
+        is_network_use.set()
 
 # create a control_thread
 def control_thread(graph, time_limit, period, socks):
@@ -564,22 +575,23 @@ def control_thread(graph, time_limit, period, socks):
     state = None
     state_ = None
     his_fraction = heuristic_fraction
+    is_network_use.set()
     while control_times < time_limit:
         # start collection
         # wait until socket returns
         # _blocking_wait(return_num, graph)
         for sock in socks:
-            print("Start collect")
             _buffer, _retry_idx = _loop_tx(sock, "statistics")
             link_return = json.loads(str(_buffer.decode()))
 
-            print("statistics return", _retry_idx, link_return)
+            # print("statistics return", _retry_idx, link_return)
             system_return.update({sock.link_name: link_return["body"]})
 
         # update graph
         graph.update_graph(system_return)
         # DQN update and control
         try:
+            is_network_use.wait()
             wlanController.update_graph(graph)
             if state is not None:
                 state_ = wlanController.get_state()
@@ -588,23 +600,27 @@ def control_thread(graph, time_limit, period, socks):
 
             if state_ is not None:
                 cost = wlanController.get_cost(his_fraction)
+                cost_f.write("{:.6f}\n".format(cost))
                 wlanController.store_transition(state, action_idx, cost, state_)
                 state = state_
+
+            is_network_use.set()
 
             controls, action_idx = wlanController.action_to_control(state)
             print(controls)
             print("training_counter", wlanController.training_counter)
             his_fraction = controls["fraction"]
+            # his_fraction = 0.5
             heuristic_fraction = his_fraction
         except Exception as e:
             print(e)
         ##
         if CONTROL_ON:
+            print("heuristic_fraction",heuristic_fraction)
             if (port_throttle := _throttle_calc(graph)):
                 # print(port_throttle)
                 throttle.update(port_throttle)
-                # edca_params = _edca_default_params(graph, 2, controls)
-                # _set_edca_parameter(conn, edca_params)
+
                 # start control
                 is_control.set()
                 for sock in socks:
@@ -621,6 +637,8 @@ def control_thread(graph, time_limit, period, socks):
                 print("=" * 50)
                 print("Control Stop")
                 print("=" * 50)
+            edca_params = _edca_default_params(graph, 2, controls)
+            _set_edca_parameter(conn, edca_params)
         # plot data
         _extract_data_from_graph(graph, data_graph, control_times)
         is_draw.set()
@@ -654,7 +672,7 @@ def start_testing_threading(graph, ctl_prot):
         graph, control_times, control_period, socks))
     training_t = threading.Thread(target=DQN_training_thread)
     tx_thread.start()
-    # training_t.start()
+    training_t.start()
     time.sleep(0.5)
     control_t.start()
 
@@ -669,7 +687,7 @@ def main(args):
     _add_ipc_port(graph)
     graph.show()
     wlanController = wlanDQNController(
-        [i/10 for i in range(1, 10, 1)], [15, 30, 60, 120], 50, graph)
+        [i/10 for i in range(1, 10, 1)], [1, 10, 15, 25, 30, 35, 40, 45], 50, graph)
     # exit()
     _set_manifest(graph)
     if args.scenario > 0:
