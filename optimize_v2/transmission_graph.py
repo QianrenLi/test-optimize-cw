@@ -108,13 +108,13 @@ class Graph:
                 self.graph[device_name][link_name].update({str(_port_number)+'@'+str(tos): {
                                                           'file_name': file_name, 'thru': thru, 'throughput': '', "throttle": 0, 'duration': duration}})                 
                 self.info_graph[device_name][link_name].update(
-                    {str(_port_number)+'@'+str(tos): {"target_rtt": target_rtt, 'name': _name}})
+                    {str(_port_number)+'@'+str(tos): {"target_rtt": target_rtt, 'name': _name, "active": True}})
         else:
             _name = name if name != '' else str(port_number)+'@'+str(tos)
             self.graph[device_name][link_name].update({str(port_number)+'@'+str(tos): {
                                                       'file_name': file_name, 'thru': thru, 'throughput': '', "throttle": 0, 'duration': duration}})
             self.info_graph[device_name][link_name].update(
-                {str(port_number)+'@'+str(tos): {"target_rtt": target_rtt, 'name': _name}})
+                {str(port_number)+'@'+str(tos): {"target_rtt": target_rtt, 'name': _name, "active": True}})
         pass
 
     def REMOVE_STREAM(self, link_name:str, port_number: int, tos=132) -> None:
