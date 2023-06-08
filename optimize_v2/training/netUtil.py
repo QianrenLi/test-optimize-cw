@@ -6,25 +6,40 @@ import numpy as np
 
 
 class resBlock(nn.Module):
-    def __init__(self, kernel_size) -> None:
+    def __init__(self, kernel_size, channels) -> None:
         # an odd kernel size is recommended
         super().__init__()
-        self.conv1 = nn.Conv1d(1, 1, kernel_size, padding=kernel_size // 2)
+        self.conv = self._make_layer(kernel_size, 1, channels, 3)
+
+    def _make_layer(self, kernel_size, in_channels, out_channels , num_layers):
+        layers = []
+        layers.append(nn.Conv1d(in_channels, out_channels, kernel_size, padding=kernel_size // 2))     
+        layers.append(nn.BatchNorm1d(out_channels))
+        layers.append(nn.ReLU(inplace=False))          
+
+        for i in range(num_layers - 2):
+            layers.append(nn.Conv1d(out_channels, out_channels, kernel_size, padding=kernel_size // 2))
+            layers.append(nn.BatchNorm1d(out_channels))
+            layers.append(nn.ReLU(inplace=False))
+
+        layers.append(nn.Conv1d(out_channels, 1, kernel_size, padding=kernel_size // 2))
+        layers.append(nn.BatchNorm1d(1))
+        layers.append(nn.ReLU(inplace=False))
+                  
+        return nn.Sequential(*layers)
 
     def forward(self, x):
-        for i in range(2):
-            x = self.conv1(x)
-        return F.relu(self.conv1(x) + x)
+        # for i in range(2):
+        return self.conv(x) + x
 
 
 class transBlock(nn.Module):
-    def __init__(self, states, kernel_size) -> None:
+    def __init__(self, states) -> None:
         # an odd kernel size is recommended
         super().__init__()
         self.query = nn.Linear(states, states)
         self.key = nn.Linear(states, states)
         self.value = nn.Linear(states, states)
-        self.conv1 = nn.Conv1d(1, 1, kernel_size, padding=kernel_size // 2)
         self.normal_factor = 1 / np.sqrt(states)
 
     def forward(self, x):
@@ -38,7 +53,7 @@ class transBlock(nn.Module):
         )
 
         temp_hidden = torch.bmm(self.attention_weights, temp_v)
-        return F.relu(self.conv1(temp_hidden) + x)
+        return temp_hidden
 
 
 class ResNet(nn.Module):
@@ -48,14 +63,14 @@ class ResNet(nn.Module):
         self.key = nn.Linear(states, hidden_states)
         self.value = nn.Linear(states, hidden_states)
         self.normal_factor = 1 / np.sqrt(hidden_states)
-        self.layer1 = self._make_layer(kernel_size, hidden_states, 5)
+        self.layer1 = self._make_layer(kernel_size, hidden_states, 2)
         self.fc = nn.Linear(hidden_states, actions)
 
     def _make_layer(self, kernel_size, hidden_states, num_layers):
         layers = []
         for i in range(num_layers):
-            layers.append(transBlock(hidden_states, kernel_size))
-            layers.append(resBlock(kernel_size))
+            layers.append(transBlock(hidden_states))
+            layers.append(resBlock(kernel_size, 3))
         return nn.Sequential(*layers)
 
     def forward(self, x):
@@ -72,4 +87,4 @@ class ResNet(nn.Module):
 
         temp_hidden = self.layer1(temp_hidden)
 
-        return F.relu(self.fc(temp_hidden))
+        return self.fc(temp_hidden)

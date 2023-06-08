@@ -43,7 +43,8 @@ def dispValue(path, agg_num, gamma , is_save = False):
 
 
 if __name__ == '__main__':
-    loss_path = f"logs/log-lossSat Jun  3 00:17:41 2023.txt"
-    cost_path = f"logs/log-costSat Jun  3 00:17:40 2023.txt"
+    loss_path = f"logs/log-loss-2023-06-07-20:53:48.txt"
+    cost_path = f"logs/log-loss-2023-06-07-20:53:47.txt"
+    # dispLoss(loss_path,1)
     dispValue(cost_path, 1, 0.9)
 
