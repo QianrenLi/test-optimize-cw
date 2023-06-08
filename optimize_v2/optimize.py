@@ -15,6 +15,7 @@ import argparse
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
+abs_path = os.path.dirname(os.path.abspath(__file__))
 COLORS = (
     plt.rcParams["axes.prop_cycle"].by_key()["color"]
     + list(mcolors.BASE_COLORS.keys())
@@ -85,13 +86,16 @@ tos_to_ac = {"196": 0, "128": 1, "96": 2, "32": 3}
 
 ## =======================DQN Controller================================= ##
 wlanController = None
-cost_f = open(f"./training/logs/log-cost-%s.txt" % time.strftime(
-            "%Y-%m-%d-%H:%M:%S", time.localtime()
-        ), "a+")
+cost_f = open(
+    f"./training/logs/log-cost-%s.txt"
+    % time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime()),
+    "a+",
+)
 ## =======================DQN Controller================================= ##
 ##
 
 temp_cw = []
+
 
 def _ip_extract(keyword, graph):
     conn = Connector()
@@ -402,9 +406,9 @@ def _init_figure():
     axs = []
     fig = plt.figure(figsize=(12.8, 9.6))
     plt.ion()
-    subplot_num = 2
+    subplot_num = 3
     for _idx in range(subplot_num):
-        _ax = fig.add_subplot(211 + _idx)
+        _ax = fig.add_subplot(311 + _idx)
         # lines.append(_line)
         axs.append(_ax)
     return fig, axs
@@ -426,23 +430,22 @@ def _update_fig(fig, axs, data_graph):
         for device_name, links in data_graph.items():
             for link_name, streams in links.items():
                 for stream_name, stream in streams.items():
-                    c = next(colors_iter)
                     if len(stream["indexes"]) > START_POINT:
                         if idx_to_key[_idx] in stream.keys():
-
-                            (_line,) = axs[_idx].plot(
-                                range(len(stream["indexes"])), ".-", color=c
-                            )
                             if idx_to_key[_idx] == "throttles":
+                                c = next(colors_iter)
+                                (_line,) = axs[_idx].plot(
+                                    range(len(stream["indexes"])), ".-", color=c
+                                )
                                 vector_y = temp_cw
                                 vector_x = list(range(len(vector_y)))
                                 _line.set_xdata(vector_x)
                                 _line.set_ydata(vector_y)
-                            
+                            c = next(colors_iter)
                             (_line,) = axs[_idx].plot(
                                 range(len(stream["indexes"])), ".-", color=c
                             )
-                            
+
                             vector_x = (
                                 np.array(stream["indexes"][START_POINT:]) - START_POINT
                             ) * control_period
@@ -664,9 +667,7 @@ def DQN_training_thread():
             # print("training_thread",wlanController.memory_counter)
 
         if wlanController.training_counter % 300 == 0:
-            torch.save(
-                wlanController.eval_net.state_dict(), "./temp/%s.pkl" % experiment_name
-            )
+            wlanController.store_params("%s/temp/%s.pkl" % (abs_path, experiment_name))
         is_network_use.set()
 
 
@@ -799,8 +800,10 @@ def main(args):
     _add_ipc_port(graph)
     graph.show()
     wlanController = wlanDQNController(
-        [i / 10 for i in range(1, 10, 1)], [1, 10, 15, 25, 30, 35, 40, 45], 300, graph
+        [i / 10 for i in range(1, 10, 1)], [1, 10, 15, 25, 30, 35, 40, 45], 600, graph
     )
+    if args.load:
+        wlanController.loa("%s/temp/%s.pkl" % (abs_path, experiment_name))
     # exit()
     _set_manifest(graph)
     if args.scenario > 0:
@@ -821,5 +824,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "-n", "--experiment_name", type=str, default="test", help="experiment name"
     )
+    parser.add_argument("--load", action="store_true", help="load model")
     args = parser.parse_args()
     main(args)

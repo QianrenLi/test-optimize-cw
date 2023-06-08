@@ -133,8 +133,6 @@ class wlanDQNController(DQNController):
         print("cost",cost)
         return cost
 
-    def store_params(self, path):
-        torch.save(self.eval_net.state_dict(), path)
 
     def training_network(self):
         loss = super().training_network()

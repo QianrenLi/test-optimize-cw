@@ -15,7 +15,7 @@ class Net(nn.Module):
 
         self.normal_factor = 1 / np.sqrt(hidden_states)
 
-        self.fc = self._make_layer(hidden_states, 2)
+        self.fc = self._make_layer(hidden_states, 1)
         self.fc1 = nn.Linear(hidden_states, actions)
 
     def _make_layer(self, hidden_states, num_layers):
@@ -41,11 +41,12 @@ class Net(nn.Module):
 
         return self.fc1(self.fc(temp_hidden))
 
-
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cpu")
 # define the controller for training
 class DQNController:
     def __init__(
-        self, state_size, action_space: list, memory_size, batch_size=4, gamma=0.9
+        self, state_size, action_space: list, memory_size, batch_size=4, gamma=0.9, hidden_state = 1024
     ) -> None:
         self.state_size = state_size
         self.action_space = action_space
@@ -63,14 +64,21 @@ class DQNController:
 
         self.memory = np.zeros((memory_size, state_size * 2 + self.action_num + 1))
 
-        self.eval_net = Net(state_size, state_size * 50, self.action_size)
-        self.action_net = Net(state_size, state_size *50 , self.action_size)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.eval_net = Net(state_size, hidden_state, self.action_size).to(device)
+        self.action_net = Net(state_size, hidden_state , self.action_size).to(device)
         self.action_opt = torch.optim.Adam(self.action_net.parameters(), lr=0.001)
-        # self.action_opt = torch.optim.SGD(self.action_net.parameters(), lr=0.0001, momentum=0.9)
-        self.criterion = nn.MSELoss()
-        # self.criterion = nn.SmoothL1Loss()
+        self.criterion = nn.MSELoss().to(device)
+        
 
         self.parameter_replace()
+
+    def load_params(self,path):
+        self.action_net.load_state_dict(torch.load(path))
+        self.parameter_replace()
+
+    def store_params(self, path):
+        torch.save(self.action_net.state_dict(), path)
 
     def set_network(
         self,
@@ -143,11 +151,10 @@ class DQNController:
         if np.random.rand() <= epsilon:
             state = torch.tensor(
                 state.reshape((1, 1, self.state_size)), dtype=torch.float
-            )
-            actions = self.action_net(state).clone().detach().numpy()
+            ).to(device)
+            actions = self.action_net(state).cpu().clone().detach().numpy()
             # print(actions)
             self.action, action_idx = self._extract_action(actions, np.array([self.active_action]))     
-            # print(self.action)
         else:
             index = list(
                 [
@@ -157,7 +164,7 @@ class DQNController:
                     for i in range(len(self.action_space))
                 ]
             )
-            action_idx = np.array([np.cumsum(index)])
+            action_idx = np.array([index])
             # print(action_idx)
             self.action = np.array(
                 [[self.action_space[i][index[i]] for i in range(len(index))]]
@@ -193,7 +200,7 @@ class DQNController:
 
     @staticmethod
     def tensor_formatting(np_array, ts_shape, dtype):
-        return torch.tensor(np_array.reshape(ts_shape), dtype=dtype)
+        return torch.tensor(np_array.reshape(ts_shape), dtype=dtype).to(device)
 
     def _action_tensor_formatting(self, cost, action_tensor, action_idx: np.ndarray):
         batch_size = len(action_tensor)
@@ -201,20 +208,13 @@ class DQNController:
         # print(action_idx)
         action_idx = torch.tensor(
             action_idx.reshape(batch_size, 1, action_num), dtype=torch.int64
-        )
-        # print("action given",action_idx)
-        # print("action_tensor",action_tensor)
-        # print(action_tensor)
-        # print(action_tensor.view(batch_size, -1, 3))
-        # print(action_tensor.view(batch_size, -1, 3).min(2)[0])
-        # print(action_tensor.view(batch_size, -1, 3).min(2)[0].view(batch_size, 1, -1))
-        # print("action_tensor_gathered",action_tensor.gather(2, action_idx).clone().detach())
+        ).to(device)
         return (
             torch.tensor(
                 np.repeat(cost, action_num, axis=1).reshape(batch_size, 1, action_num),
                 dtype=torch.float,
-            )
-            + self.gamma * action_tensor.gather(2, action_idx).clone().detach()
+            ).to(device)
+            + self.gamma * action_tensor.gather(2, action_idx)
         )
 
     def parameter_replace(self):
@@ -245,38 +245,22 @@ class DQNController:
                 (-1, 1, _action_idx.shape[1]),
                 torch.int64,
             )
-            # print("action indx in memory", _action_idx)
             _state_ = self.tensor_formatting(
                 np.take(state_, batch_idx, axis=0),
                 (-1, 1, self.state_size),
                 torch.float,
             )
-            # print("_state", _state)
-            # print("_action_idx", _action_idx)
-
-            # print(_state_)
             _cost = np.take(cost, batch_idx, axis=0)
-            # print(_cost)
-            # training in batch
             q_action = self.action_net(_state)
-            # print("q_action",q_action.clone().detach())
             q_action = q_action.gather(2, _action_idx)
             
 
             with torch.no_grad():
                 q_action_next = self.eval_net(_state_).detach()
                 _, _action_idx = self._extract_action(q_action_next, _action_idx_np)
-                # print(_action_idx)
-
-                # print(q_action_next.min(2))
-                # print(q_action_next.min(2)[0].gather(2,))
                 q_target = self._action_tensor_formatting(
                     _cost, q_action_next, self._remove_inactive_action(_action_idx)
                 )
-            
-            # print("target",q_action_next.clone().detach())
-            # print("select_q_action",q_action.clone().detach())
-            # print("select_q_target",q_target.clone().detach())
             self.train_counter += 1
 
             self.action_opt.zero_grad()
@@ -288,7 +272,6 @@ class DQNController:
             torch.nn.utils.clip_grad_value_(self.action_net.parameters(), 100)
             # update network
             self.action_opt.step()
-            # print("system after training", self.action_net(_state).clone().detach())
 
         if self.train_counter >= self.train_counter_max:
             self.train_counter = 0
