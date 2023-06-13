@@ -34,6 +34,8 @@ class wlanDQNController(DQNController):
         self.max_action_num = 5     # max num of controllable streams
         self.agent_states_num = 3   # 2 states for each stream
 
+        self.is_memory_save = True
+
         action_space = []
         action_space.append(file_levels)
         for device_name, links in graph.graph.items():

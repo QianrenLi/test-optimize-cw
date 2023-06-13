@@ -69,7 +69,7 @@ class DQNController:
         self.memory_counter = 0
         self.train_counter_max = 1000
 
-        self.memory_save = False
+        self.is_memory_save = False
 
         self.memory = np.zeros((memory_size, state_size * 2 + self.action_num + 1))
 
@@ -160,7 +160,7 @@ class DQNController:
         transition = np.hstack((state, action_idx, cost, state_))
         index = self.memory_counter % self.memory_size
         self.memory[index, :] = transition
-        if index == 0:
+        if index == 0 and self.is_memory_save:
             self.store_memory()
         self.memory_counter += 1
         
