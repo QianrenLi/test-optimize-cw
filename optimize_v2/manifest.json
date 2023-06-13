@@ -123,12 +123,13 @@
             "description": "Run stream-replay with default manifest file.",
             "parameters": {
                 "target_addr": "",
+                "tx_addr": "",
                 "duration": 10,
                 "manifest_name": "manifest.json",
                 "ipc-port": 11112
             },
             "commands": [
-                "(cd stream-replay; ./target/release/stream-replay data/$manifest_name $target_addr $duration --ipc-port $ipc-port)"
+                "(cd stream-replay; ./target/release/stream-replay data/$manifest_name $target_addr $tx_addr $duration --ipc-port $ipc-port)"
             ]
         },
         "run-replay-client-Windows": {
@@ -204,10 +205,11 @@
                 "ac": 3,
                 "cw_min": -1,
                 "cw_max": -1,
-                "aifs": -1
+                "aifs": -1,
+                "realtek": ""
             },
             "commands": [
-                "cd wlsops-hack; sudo python3 modify_edca.py --ac $ac --cw-min $cw_min --cw-max $cw_max --aifs $aifs"
+                "cd wlsops-hack; sudo python3 modify_edca.py --ac $ac --cw-min $cw_min --cw-max $cw_max --aifs $aifs $realtek"
             ]
         }
     }

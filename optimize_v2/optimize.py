@@ -208,6 +208,7 @@ def _transmission_block(graph):
                 "run-replay-client",
                 {
                     "target_addr": ip_addr,
+                    "tx_addr": graph.info_graph[sender][prot + "_ip_addr"],
                     "duration": DURATION,
                     "manifest_name": link_name + ".json",
                     "ipc-port": graph.info_graph[sender][link_name]["ipc_port"],
@@ -312,22 +313,25 @@ def _get_graph(scenario, DURATION):
 def _edca_default_params(graph: Graph, controls: dict):
     params = {}
 
-    for device_name_tos in controls.keys():
-        if "@" in device_name_tos:
-            device_name, tos = device_name_tos.split("@")
-            if device_name in graph.graph:
-                params[device_name] = {
+    for link_name_tos in controls.keys():
+        if "_" in link_name_tos:
+            prot, tos, tx_device_name, _ = link_name_tos.split("_")
+            realtek = "--realtek" if prot == "wlx" else ""
+            if tx_device_name in graph.graph:
+                params[link_name_tos] = {
                     "ac": tos_to_ac[tos],
-                    "cw_min": int(controls[device_name_tos]),
-                    "cw_max": int(controls[device_name_tos]),
+                    "cw_min": int(controls[link_name_tos]),
+                    "cw_max": int(controls[link_name_tos]),
                     "aifs": -1,
+                    "realtek": realtek
                 }
     return params
 
 
 def _set_edca_parameter(conn: Connector, params):
-    for device_name in params:
-        conn.batch(device_name, "modify_edca", params[device_name])
+    for link_name_tos in params:
+        device_name = link_name_tos.split("_")[2]
+        conn.batch(device_name, "modify_edca", params[link_name_tos])
         conn.executor.wait(0.01)
     conn.executor.wait(0.01).apply()
     return conn
