@@ -210,8 +210,8 @@ def cw_test_case(DURATION) -> Graph:
     graph.ADD_STREAM(link2, port_number=6202, file_name="proj_6.25MB.npy", duration=[
                      0, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=96, target_rtt=18, name= 'Proj')
 
-    # graph.ADD_STREAM(link1, port_number=6203, file_name="proj_6.25MB.npy", duration=[
-    #                  DURATION // 2, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=96, target_rtt=18, name= 'Proj')
+    graph.ADD_STREAM(link1, port_number=6203, file_name="proj_6.25MB.npy", duration=[
+                     150, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=96, target_rtt=18, name= 'Proj')
 
     graph.ADD_STREAM(link1, port_number=6201, file_name="file_75MB.npy", duration=[
                      0, DURATION], thru=0, tos=96, name= 'File')   

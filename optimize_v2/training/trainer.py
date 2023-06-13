@@ -10,12 +10,12 @@ class Net(nn.Module):
     def __init__(self, states, hidden_states, actions):
         super(Net, self).__init__()
         self.query = nn.Linear(states, hidden_states)
-        self.key = nn.Linear(states, hidden_states)
-        self.value = nn.Linear(states, hidden_states)
+        # self.key = nn.Linear(states, hidden_states)
+        # self.value = nn.Linear(states, hidden_states)
 
-        self.normal_factor = 1 / np.sqrt(hidden_states)
+        # self.normal_factor = 1 / np.sqrt(hidden_states)
 
-        self.fc = self._make_layer(hidden_states, 1)
+        self.fc = self._make_layer(hidden_states, 2)
         self.fc1 = nn.Linear(hidden_states, actions)
 
     def _make_layer(self, hidden_states, num_layers):
@@ -29,17 +29,17 @@ class Net(nn.Module):
 
     def forward(self, x):
         temp_q = self.query(x)
-        temp_k = self.key(x)
-        temp_v = self.value(x)
+        # temp_k = self.key(x)
+        # temp_v = self.value(x)
 
-        self.attention_weights = (
-            nn.Softmax(dim=-1)(torch.bmm(temp_q, temp_k.permute(0, 2, 1)))
-            * self.normal_factor
-        )
+        # self.attention_weights = (
+        #     nn.Softmax(dim=-1)(torch.bmm(temp_q, temp_k.permute(0, 2, 1)))
+        #     * self.normal_factor
+        # )
 
-        temp_hidden = torch.bmm(self.attention_weights, temp_v)
+        # temp_hidden = torch.bmm(self.attention_weights, temp_v)
 
-        return self.fc1(self.fc(temp_hidden))
+        return self.fc1(self.fc(temp_q))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # device = torch.device("cpu")

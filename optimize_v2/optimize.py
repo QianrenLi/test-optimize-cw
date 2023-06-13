@@ -17,7 +17,7 @@ import matplotlib.colors as mcolors
 
 abs_path = os.path.dirname(os.path.abspath(__file__))
 COLORS = (
-    plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    plt.rcParams['axes.prop_cycle'].by_key()['color'] 
     + list(mcolors.BASE_COLORS.keys())
     + list(mcolors.CSS4_COLORS.keys())
 )  # type: ignore
@@ -54,7 +54,7 @@ heuristic_fraction = 0.1
 
 
 ## ==================Constant parameter================================== ##
-_duration = 600
+_duration = 300
 START_POINT = 0
 control_period = 0.8
 DURATION = int(_duration * 1.7 + START_POINT * control_period)
@@ -94,7 +94,8 @@ cost_f = open(
 ## =======================DQN Controller================================= ##
 ##
 
-temp_cw = []
+temp_cw = {}
+temp_idx = {}
 
 
 def _ip_extract(keyword, graph):
@@ -313,7 +314,6 @@ def _edca_default_params(graph: Graph, controls: dict):
 
     for device_name_tos in controls.keys():
         if "@" in device_name_tos:
-            print(device_name_tos)
             device_name, tos = device_name_tos.split("@")
             if device_name in graph.graph:
                 params[device_name] = {
@@ -406,9 +406,9 @@ def _init_figure():
     axs = []
     fig = plt.figure(figsize=(12.8, 9.6))
     plt.ion()
-    subplot_num = 3
+    subplot_num = 2
     for _idx in range(subplot_num):
-        _ax = fig.add_subplot(311 + _idx)
+        _ax = fig.add_subplot(211 + _idx)
         # lines.append(_line)
         axs.append(_ax)
     return fig, axs
@@ -433,14 +433,19 @@ def _update_fig(fig, axs, data_graph):
                     if len(stream["indexes"]) > START_POINT:
                         if idx_to_key[_idx] in stream.keys():
                             if idx_to_key[_idx] == "throttles":
-                                c = next(colors_iter)
-                                (_line,) = axs[_idx].plot(
-                                    range(len(stream["indexes"])), ".-", color=c
-                                )
-                                vector_y = temp_cw
-                                vector_x = list(range(len(vector_y)))
-                                _line.set_xdata(vector_x)
-                                _line.set_ydata(vector_y)
+                                for _temp_key in temp_cw:
+                                    c = next(colors_iter)
+                                    vector_y = temp_cw[_temp_key]
+                                    vector_x = (
+                                        np.array(temp_idx[_temp_key])
+                                    ) * control_period
+                                    (_line,) = axs[_idx].plot(
+                                        range(len(vector_x)), ".-", color=c
+                                    )
+                                    _line.set_xdata(vector_x)
+                                    _line.set_ydata(vector_y)
+                                    legends.append("cw-%s" % _temp_key)
+
                             c = next(colors_iter)
                             (_line,) = axs[_idx].plot(
                                 range(len(stream["indexes"])), ".-", color=c
@@ -451,7 +456,8 @@ def _update_fig(fig, axs, data_graph):
                             ) * control_period
 
                             vector_y = stream[idx_to_key[_idx]][START_POINT:]
-
+                            _line.set_xdata(vector_x)
+                            _line.set_ydata(vector_y)
                             legends.append(stream_name)
 
                             x_axs[0] = min(x_axs[0], min(vector_x))
@@ -655,12 +661,20 @@ def DQN_training_thread():
     import torch
 
     global is_stop, wlanController
+    loss_collect = 0
+    counter = 0
+    counter_max = 100
     while True:
         if is_stop:
             break
         is_network_use.wait()
         if wlanController.memory_counter > 4:
-            wlanController.training_network()
+            loss = wlanController.training_network()
+            loss_collect+= loss
+            counter += 1 
+            if counter > counter_max:
+                print("loss\t", loss_collect/counter_max)
+                counter = 0
             time.sleep(0.01)
         else:
             time.sleep(0.5)
@@ -744,7 +758,15 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
                 print("=" * 50)
             ## set edca parameter
             edca_params = _edca_default_params(graph, controls)
-            temp_cw.append(controls["PC@96"])
+            #  store cw value for plot  
+            for _device_name in controls: 
+                if _device_name != "fraction":
+                    if _device_name not in temp_cw:
+                        temp_cw.update({_device_name:[]})
+                        temp_idx.update({_device_name:[]})
+                    temp_cw[_device_name].append(controls[_device_name]/50)
+                    temp_idx[_device_name].append(control_times)
+
             _set_edca_parameter(conn, edca_params)
         ## plot data
         _extract_data_from_graph(graph, data_graph, control_times)
@@ -800,10 +822,10 @@ def main(args):
     _add_ipc_port(graph)
     graph.show()
     wlanController = wlanDQNController(
-        [i / 10 for i in range(1, 10, 1)], [1, 10, 15, 25, 30, 35, 40, 45], 600, graph
+        [i / 10 for i in range(1, 10, 1)], [1, 10, 15, 25, 30, 35, 40, 45], 10000, graph, batch_size = 32
     )
     if args.load:
-        wlanController.loa("%s/temp/%s.pkl" % (abs_path, experiment_name))
+        wlanController.load_params("%s/temp/%s.pkl" % (abs_path, experiment_name))
     # exit()
     _set_manifest(graph)
     if args.scenario > 0:

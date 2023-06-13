@@ -79,7 +79,7 @@ class wlanDQNController(DQNController):
                             if not self.is_sorted:
                                 state.append(0)
                                 state.append(0)
-                                active_action.append(0)
+                                active_action.append(-1)                                    # -1 denote action not activated
 
         active_action.insert(0,file_action_flag)                                            # insert file action space in the first position
         remain_state_len = self.max_state_num * self.agent_states_num - len(state)
@@ -88,6 +88,7 @@ class wlanDQNController(DQNController):
         [active_action.append(-1) for i in range(remain_action_len)]
 
         self.active_action = active_action
+        print(active_action)
         return np.array(state)
 
     def action_to_control(self, state):
@@ -104,7 +105,7 @@ class wlanDQNController(DQNController):
                     port, tos = stream_name.split("@")
                     
                     if "file" not in stream["file_name"]:
-                        if self.active_action[idx] != -1:
+                        if action_idx[idx] != -1:
                             control.update({device_name +"@"+ tos: action[idx]})
                             idx += 1
                         elif not self.is_sorted:
@@ -136,7 +137,7 @@ class wlanDQNController(DQNController):
 
     def training_network(self):
         loss = super().training_network()
-        print("loss",loss)
+        # print("loss",loss)
         self.f.write("{:.6f}\n".format(loss))
         self.training_counter += 1
         return loss
