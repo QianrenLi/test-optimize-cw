@@ -217,6 +217,22 @@ def cw_test_case(DURATION) -> Graph:
                      0, DURATION], thru=0, tos=96, name= 'File')   
     return graph
 
+def cw_training_case(DURATION,ind) -> Graph:
+    graph = Graph()
+    graph.ADD_DEVICE('phone')
+    graph.ADD_DEVICE('PC')
+    graph.ADD_DEVICE('pad')
+    graph.ADD_DEVICE('TV')
+
+    link1 = graph.ADD_LINK('phone', '', 'wlan', 200)
+    link2 = graph.ADD_LINK('PC', '', 'wlx', 200)
+    link3 = graph.ADD_LINK('pad', '', 'wlan', 200)
+    link4 = graph.ADD_LINK('TV', '', 'wlx', 200)    
+
+    lists = [link1, link2, link3, link4]
+    return graph, lists
+            
+
+
 if __name__ == '__main__':
-    graph = scenario3(40)
-    scenario3_add_proj(graph,40).show()
+    cw_training_case(2)

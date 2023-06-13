@@ -169,8 +169,8 @@ class Graph:
         """
         Based on returning information, update the content of graph. 
         Besides, for control consideration, activate and inactivate different streams.
-         
-
+        
+        Active the stream only if the stream is on exchange some data
         Args:
             reply (dict): A dict structure which is exactly the same as graph which contains the observed information
         """

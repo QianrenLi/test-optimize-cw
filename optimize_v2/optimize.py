@@ -734,8 +734,8 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
             print("training_counter", wlanController.training_counter)
             if "fraction" in controls.keys():
                 his_fraction = controls["fraction"]
-                # his_fraction = 0.5
                 heuristic_fraction = his_fraction
+                
         except Exception as e:
             print(e)
         ##
@@ -787,6 +787,25 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
     cost_f.close()
 
 
+## iterative training all the stream
+def iter_all_training_scenario(ind):
+    from itertools import combinations
+    _, _lists = tc.cw_training_case(DURATION)
+    for _ind in range(ind, len(_lists)):
+        for comb in combinations(_lists, _ind):
+            _graph , _ = tc.cw_training_case(DURATION)
+            port_id = 6201
+            for _link in comb:
+                _graph.ADD_STREAM(_link, port_number=port_id, file_name="proj_6.25MB.npy", duration=[
+                                0, DURATION], thru=6.25, tos=32, target_rtt=18, name= 'Proj')
+                port_id += 1
+            try:
+                transmission_thread(_graph)
+            except Exception as e:
+                print("===== {ind}-th transmission Error =====",e)
+                break
+    
+
 def start_testing_threading(graph, ctl_prot):
     # init_transmission thread
     tx_thread = threading.Thread(target=transmission_thread, args=(graph,))
@@ -821,7 +840,8 @@ def main(args):
     experiment_name = args.experiment_name
     graph = tc.cw_test_case(DURATION)
     if args.scenario > 0:
-        _ip_extract("wlan\\|p2p\\|wlp", graph)
+        _ip_extract("wlan\\|p2p\\|wlp\\|wlx", graph)            #wlan - termux wifi ip  ; p2p - Wifi Direct ip
+                                                                #wlp - Intel IC wifi ip ; wlx - Realtek IC (rtl8812au) wifi ip
         _setup_ip(graph)
     _add_ipc_port(graph)
     graph.show()

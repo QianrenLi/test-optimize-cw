@@ -41,12 +41,19 @@ class Net(nn.Module):
 
         return self.fc1(self.fc(temp_q))
 
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # device = torch.device("cpu")
 # define the controller for training
 class DQNController:
     def __init__(
-        self, state_size, action_space: list, memory_size, batch_size=4, gamma=0.9, hidden_state = 1024
+        self,
+        state_size,
+        action_space: list,
+        memory_size,
+        batch_size=4,
+        gamma=0.9,
+        hidden_state=1024,
     ) -> None:
         self.state_size = state_size
         self.action_space = action_space
@@ -62,23 +69,35 @@ class DQNController:
         self.memory_counter = 0
         self.train_counter_max = 1000
 
+        self.memory_save = False
+
         self.memory = np.zeros((memory_size, state_size * 2 + self.action_num + 1))
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.eval_net = Net(state_size, hidden_state, self.action_size).to(device)
-        self.action_net = Net(state_size, hidden_state , self.action_size).to(device)
+        self.action_net = Net(state_size, hidden_state, self.action_size).to(device)
         self.action_opt = torch.optim.Adam(self.action_net.parameters(), lr=0.001)
         self.criterion = nn.MSELoss().to(device)
-        
 
         self.parameter_replace()
 
-    def load_params(self,path):
+    def load_params(self, path):
         self.action_net.load_state_dict(torch.load(path))
         self.parameter_replace()
 
     def store_params(self, path):
         torch.save(self.action_net.state_dict(), path)
+
+    def store_memory(self):
+        import time
+
+        npy_name = (
+            "%d-%d" % (self.state_size, self.action_size)
+            + "-"
+            + time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
+            + ".npy"
+        )
+        np.save(npy_name, self.memory)
 
     def set_network(
         self,
@@ -141,7 +160,10 @@ class DQNController:
         transition = np.hstack((state, action_idx, cost, state_))
         index = self.memory_counter % self.memory_size
         self.memory[index, :] = transition
+        if index == 0:
+            self.store_memory()
         self.memory_counter += 1
+        
 
     def get_action(self, state):
         """
@@ -154,7 +176,9 @@ class DQNController:
             ).to(device)
             actions = self.action_net(state).cpu().clone().detach().numpy()
             # print(actions)
-            self.action, action_idx = self._extract_action(actions, np.array([self.active_action]))     
+            self.action, action_idx = self._extract_action(
+                actions, np.array([self.active_action])
+            )
         else:
             index = list(
                 [
@@ -209,26 +233,24 @@ class DQNController:
         action_idx = torch.tensor(
             action_idx.reshape(batch_size, 1, action_num), dtype=torch.int64
         ).to(device)
-        return (
-            torch.tensor(
-                np.repeat(cost, action_num, axis=1).reshape(batch_size, 1, action_num),
-                dtype=torch.float,
-            ).to(device)
-            + self.gamma * action_tensor.gather(2, action_idx)
-        )
+        return torch.tensor(
+            np.repeat(cost, action_num, axis=1).reshape(batch_size, 1, action_num),
+            dtype=torch.float,
+        ).to(device) + self.gamma * action_tensor.gather(2, action_idx)
 
     def parameter_replace(self):
         # print("pre\t",self.action_net.state_dict())
         self.eval_net.load_state_dict(self.action_net.state_dict())
         # print("a\t",self.action_net.state_dict())
-        
 
     def training_network(self):
         if None in [self.action_opt, self.criterion, self.eval_net]:
             print("Check optimizer, criterion and network setup")
             return
         # extract memory
-        index = np.random.choice(min(self.memory_size, self.memory_counter), self.batch_size)
+        index = np.random.choice(
+            min(self.memory_size, self.memory_counter), self.batch_size
+        )
         batch_memory = self.memory[index, :]
         state, action_idx, cost, state_ = self.extract_memory(batch_memory)
         # select batch, addressing the different active action
@@ -237,9 +259,9 @@ class DQNController:
             _state = self.tensor_formatting(
                 np.take(state, batch_idx, axis=0), (-1, 1, self.state_size), torch.float
             )
-            
+
             _action_idx_np = np.take(action_idx, batch_idx, axis=0)
-            _action_idx =  self._remove_inactive_action(_action_idx_np)
+            _action_idx = self._remove_inactive_action(_action_idx_np)
             _action_idx = self.tensor_formatting(
                 _action_idx,
                 (-1, 1, _action_idx.shape[1]),
@@ -253,7 +275,6 @@ class DQNController:
             _cost = np.take(cost, batch_idx, axis=0)
             q_action = self.action_net(_state)
             q_action = q_action.gather(2, _action_idx)
-            
 
             with torch.no_grad():
                 q_action_next = self.eval_net(_state_).detach()
