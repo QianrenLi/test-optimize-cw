@@ -65,7 +65,7 @@ static sliding_window_t conditions = { .ptr=0, .queue={0} };
 /// @return throttle fraction of files.
 static float calc_throttle_fraction(float step_size)
 {
-    if (throttle_fraction + step_size > 0)
+    if (throttle_fraction + step_size > MIN_FRAC)
     {
         throttle_fraction = MIN(1 - MIN_FRAC, throttle_fraction + step_size);
     }

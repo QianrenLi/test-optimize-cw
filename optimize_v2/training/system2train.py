@@ -1,7 +1,6 @@
 import sys
 import os
 
-
 import numpy as np
 import torch
 import time
@@ -14,10 +13,14 @@ from training.trainer import DQNController
 
 
 class wlanDQNController(DQNController):
+    '''
+    Default the action structure is assumed to be: [[fraction],[cw], [aifs]], where one stream has fraction and the other has. 
+    '''
     def __init__(
         self,
         file_levels: list,
         cw_levels: list,
+        aifs_levels: list,
         memory_size,
         graph: Graph,
         batch_size=16,
@@ -30,9 +33,12 @@ class wlanDQNController(DQNController):
         self.f = open(self.log_path, "a+")
         self.training_counter = 0
         self.is_sorted = False
-        self.max_state_num = 3      # max num of streams
-        self.max_action_num = 5     # max num of controllable streams
-        self.agent_states_num = 3   # 2 states for each stream
+
+        self.max_agent_num = 3  # max num of streams
+        self.max_action_num = 5  # max num of controllable streams
+
+        self.agent_action_num = 2  # each rtt agent action nums
+        self.agent_states_num = 2 + self.agent_action_num  # 4 states for each stream
 
         self.is_memory_save = True
 
@@ -41,10 +47,11 @@ class wlanDQNController(DQNController):
         for device_name, links in graph.graph.items():
             for link_name, streams in links.items():
                 for stream_name, stream in streams.items():
-                    if "file" not in stream["file_name"]:  # cw action for each stream
-                        action_space.append(cw_levels)
+                    if "file" not in stream["file_name"]:
+                        action_space.append(cw_levels)  # cw action for each stream
+                        action_space.append(aifs_levels)  # AIFS action for each stream
 
-        remain_len = self.max_action_num - len(action_space)
+        remain_len = self.max_action_num * self.agent_action_num + 1  - len(action_space)
         [action_space.append(cw_levels) for i in range(remain_len)]
         super().__init__(
             self.max_state_num * self.agent_states_num,
@@ -57,11 +64,12 @@ class wlanDQNController(DQNController):
     def update_graph(self, graph):
         self.graph = graph
 
-    def get_state(self, his_action):
+    def get_state(self):
         state = []
         skipped_state_counter = 0
         active_action = []
-        file_action_flag = -1  # 0: not file action, 1: file action
+        file_action_flag = -1  # -1: not file action, 1: file action
+        file_action_value = 0
         # hard embedding
         for device_name, links in self.graph.graph.items():
             for link_name, streams in links.items():
@@ -75,31 +83,32 @@ class wlanDQNController(DQNController):
                         ## system state each IC: rtt, target_rtt, cw
                         if "file" not in stream["file_name"]:
                             state.append(stream["rtt"])
-                            state.append(
-                                self.graph.info_graph[device_name][link_name][
-                                    stream_name
-                                ]["target_rtt"]
-                            )
-                            state.append(
-                                self.graph.info_graph[device_name][link_name][
-                                    stream_name
-                                ]["cw"]
-                            )
-                            active_action.append(1)
+                            for _state_name in ["target_rtt", "cw", "aifs"]:
+                                state.append(
+                                    self.graph.info_graph[device_name][link_name][
+                                        stream_name
+                                    ][_state_name]
+                                )
+                            [
+                                active_action.append(1)
+                                for _ in range(self.agent_action_num)
+                            ]
                         else:
                             file_action_flag = 1
+                            file_action_value = self.graph.info_graph[device_name][link_name][
+                                stream_name
+                            ]["throttle"]
                     else:
                         if "file" not in stream["file_name"]:
                             if not self.is_sorted:
-                                state.append(0)
-                                state.append(0)
-                                active_action.append(
-                                    -1
-                                )  # -1 denote action not activated
+                                [state.append(0) for _ in range(self.agent_states_num)]
+                                [
+                                    active_action.append(-1)
+                                    for _ in range(self.agent_action_num)
+                                ]  # -1 denote action not activated
 
-        active_action.insert(
-            0, file_action_flag
-        )  # insert file action space in the first position
+        active_action.insert(0, file_action_flag)  # insert file action space in the first position
+        state.insert(0, file_action_value)  # insert fraction in the first position
         remain_state_len = self.max_state_num * self.agent_states_num - len(state)
         remain_action_len = self.max_action_num - len(active_action)
         [state.append(0) for i in range(remain_state_len)]
@@ -108,6 +117,23 @@ class wlanDQNController(DQNController):
         self.active_action = active_action
         print(active_action)
         return np.array(state)
+
+    def init_action_guess(self):                            # SOlution for initial action required to training
+        action = []
+        default_action = {"cw": 3, "aifs": 3, "throttle": 0.6}
+        for device_name, links in self.graph.graph.items():
+            for link_name, streams in links.items():
+                for stream_name, stream in streams.items():
+                    if "file" not in stream["file_name"]:
+                        for _idx, action_name in enumerate(["cw", "aifs"]):
+                            self.graph.info_graph[device_name][link_name][
+                                stream_name
+                            ].update({action_name: default_action[action_name]}) 
+                    else:
+                        self.graph.info_graph[device_name][link_name][
+                            stream_name
+                        ].update({"throttle": default_action["throttle"]})                         
+    
 
     def action_to_control(self, state):
         action, action_idx = self.get_action(state)
@@ -122,27 +148,22 @@ class wlanDQNController(DQNController):
                 prot, sender, receiver = link_name.split("_")
                 for stream_name, stream in streams.items():
                     port, tos = stream_name.split("@")
-
                     if "file" not in stream["file_name"]:
+                        ## Start Action Load Section
+                        _control = {}
                         if action_idx[idx] != -1:
-                            self.graph.info_graph[device_name][link_name][
-                                stream_name
-                            ].update({"cw": action[idx]})
+                            for _idx, action_name in enumerate(["cw", "aifs"]):
+                                self.graph.info_graph[device_name][link_name][
+                                    stream_name
+                                ].update({action_name: action[idx + _idx]})
+                                _control.update({action_name: action[idx + _idx]})
                             control.update(
-                                {
-                                    prot
-                                    + "_"
-                                    + tos
-                                    + sender
-                                    + "_"
-                                    + receiver: action[idx]
-                                }
+                                {prot + "_" + tos + sender + "_" + receiver: _control}
                             )
-                            idx += 1
+                            idx += self.agent_action_num
                         elif not self.is_sorted:
-                            idx += 1
-
-        # print(self.active_action)
+                            idx += self.agent_action_num
+                        ## End Action Load Section
         control.update({"fraction": action[0]}) if self.active_action[0] != -1 else None
         return control, action_idx
 
@@ -191,6 +212,4 @@ if __name__ == "__main__":
     state_ = wlanController.get_state()
     print(cost)
     wlanController.store_transition(state, _, cost, state_)
-    # print(wlanController.active_action)
-    # print(wlanController.action_space)
-    # print(wlanController.training_network())
+

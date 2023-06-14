@@ -866,10 +866,12 @@ def main(args):
     wlanController = wlanDQNController(
         [i / 10 for i in range(1, 10, 1)],
         [1, 3, 7 ,15, 31 ,63, 127, 255],            # CW value
+        [2, 3, 7, 15, 20, 25, 30 , 35 ],            # AIFSN 
         10000,
         graph,
         batch_size=32,
     )
+    wlanController.init_action_guess()
     if args.load:
         wlanController.load_params("%s/temp/%s.pkl" % (abs_path, experiment_name))
     # exit()
