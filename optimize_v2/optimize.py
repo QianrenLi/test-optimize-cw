@@ -17,7 +17,7 @@ import matplotlib.colors as mcolors
 
 abs_path = os.path.dirname(os.path.abspath(__file__))
 COLORS = (
-    plt.rcParams['axes.prop_cycle'].by_key()['color'] 
+    plt.rcParams["axes.prop_cycle"].by_key()["color"]
     + list(mcolors.BASE_COLORS.keys())
     + list(mcolors.CSS4_COLORS.keys())
 )  # type: ignore
@@ -323,7 +323,7 @@ def _edca_default_params(graph: Graph, controls: dict):
                     "cw_min": int(controls[link_name_tos]),
                     "cw_max": int(controls[link_name_tos]),
                     "aifs": -1,
-                    "realtek": realtek
+                    "realtek": realtek,
                 }
     return params
 
@@ -674,10 +674,10 @@ def DQN_training_thread():
         is_network_use.wait()
         if wlanController.memory_counter > 4:
             loss = wlanController.training_network()
-            loss_collect+= loss
-            counter += 1 
+            loss_collect += loss
+            counter += 1
             if counter > counter_max:
-                print("loss\t", loss_collect/counter_max)
+                print("loss\t", loss_collect / counter_max)
                 counter = 0
             time.sleep(0.01)
         else:
@@ -687,6 +687,13 @@ def DQN_training_thread():
         if wlanController.training_counter % 300 == 0:
             wlanController.store_params("%s/temp/%s.pkl" % (abs_path, experiment_name))
         is_network_use.set()
+
+    wlanController.store_memory(
+        "%s/temp/%s-%d-%d" % (abs_path, experiment_name,wlanController.state_size, wlanController.action_size)
+        + "-"
+        + time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
+        + ".npy"
+    )
 
 
 def control_thread(graph, time_limit, period, socks):  # create a control_thread
@@ -735,7 +742,7 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
             if "fraction" in controls.keys():
                 his_fraction = controls["fraction"]
                 heuristic_fraction = his_fraction
-                
+
         except Exception as e:
             print(e)
         ##
@@ -762,13 +769,13 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
                 print("=" * 50)
             ## set edca parameter
             edca_params = _edca_default_params(graph, controls)
-            #  store cw value for plot  
-            for _device_name in controls: 
+            #  store cw value for plot
+            for _device_name in controls:
                 if _device_name != "fraction":
                     if _device_name not in temp_cw:
-                        temp_cw.update({_device_name:[]})
-                        temp_idx.update({_device_name:[]})
-                    temp_cw[_device_name].append(controls[_device_name]/50)
+                        temp_cw.update({_device_name: []})
+                        temp_idx.update({_device_name: []})
+                    temp_cw[_device_name].append(controls[_device_name] / 50)
                     temp_idx[_device_name].append(control_times)
 
             _set_edca_parameter(conn, edca_params)
@@ -790,21 +797,30 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
 ## iterative training all the stream
 def iter_all_training_scenario(ind):
     from itertools import combinations
+
     _, _lists = tc.cw_training_case(DURATION)
     for _ind in range(ind, len(_lists)):
         for comb in combinations(_lists, _ind):
-            _graph , _ = tc.cw_training_case(DURATION)
+            _graph, _ = tc.cw_training_case(DURATION)
             port_id = 6201
             for _link in comb:
-                _graph.ADD_STREAM(_link, port_number=port_id, file_name="proj_6.25MB.npy", duration=[
-                                0, DURATION], thru=6.25, tos=32, target_rtt=18, name= 'Proj')
+                _graph.ADD_STREAM(
+                    _link,
+                    port_number=port_id,
+                    file_name="proj_6.25MB.npy",
+                    duration=[0, DURATION],
+                    thru=6.25,
+                    tos=32,
+                    target_rtt=18,
+                    name="Proj",
+                )
                 port_id += 1
             try:
                 transmission_thread(_graph)
             except Exception as e:
-                print("===== {ind}-th transmission Error =====",e)
+                print("===== {ind}-th transmission Error =====", e)
                 break
-    
+
 
 def start_testing_threading(graph, ctl_prot):
     # init_transmission thread
@@ -840,13 +856,19 @@ def main(args):
     experiment_name = args.experiment_name
     graph = tc.cw_test_case(DURATION)
     if args.scenario > 0:
-        _ip_extract("wlan\\|p2p\\|wlp\\|wlx", graph)            #wlan - termux wifi ip  ; p2p - Wifi Direct ip
-                                                                #wlp - Intel IC wifi ip ; wlx - Realtek IC (rtl8812au) wifi ip
+        _ip_extract(
+            "wlan\\|p2p\\|wlp\\|wlx", graph
+        )  # wlan - termux wifi ip  ; p2p - Wifi Direct ip
+        # wlp - Intel IC wifi ip ; wlx - Realtek IC (rtl8812au) wifi ip
         _setup_ip(graph)
     _add_ipc_port(graph)
     graph.show()
     wlanController = wlanDQNController(
-        [i / 10 for i in range(1, 10, 1)], [1, 10, 15, 25, 30, 35, 40, 45], 10000, graph, batch_size = 32
+        [i / 10 for i in range(1, 10, 1)],
+        [1, 3, 7 ,15, 31 ,63, 127, 255],            # CW value
+        10000,
+        graph,
+        batch_size=32,
     )
     if args.load:
         wlanController.load_params("%s/temp/%s.pkl" % (abs_path, experiment_name))

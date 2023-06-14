@@ -88,16 +88,16 @@ class DQNController:
     def store_params(self, path):
         torch.save(self.action_net.state_dict(), path)
 
-    def store_memory(self):
-        import time
+    def load_memory(self, path:str):
+        _memory = np.load(path)
+        self.memory_counter = len(_memory)
+        self.memory_size = self.memory_counter
+        self.memory = _memory
 
-        npy_name = (
-            "%d-%d" % (self.state_size, self.action_size)
-            + "-"
-            + time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
-            + ".npy"
-        )
-        np.save(npy_name, self.memory)
+    def store_memory(self,  path:str):
+        memory_limit = min(self.memory_size, self.memory_counter)
+        _memory = self.memory[: memory_limit]
+        np.save(path, _memory)
 
     def set_network(
         self,
