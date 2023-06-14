@@ -217,7 +217,7 @@ def cw_test_case(DURATION) -> Graph:
                      0, DURATION], thru=0, tos=96, name= 'File')   
     return graph
 
-def cw_training_case(DURATION,ind) -> Graph:
+def cw_training_case():
     graph = Graph()
     graph.ADD_DEVICE('phone')
     graph.ADD_DEVICE('PC')

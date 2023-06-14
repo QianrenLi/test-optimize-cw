@@ -38,7 +38,7 @@ class wlanDQNController(DQNController):
         self.max_action_num = 5  # max num of controllable streams
 
         self.agent_action_num = 2  # each rtt agent action nums
-        self.agent_states_num = 2 + self.agent_action_num  # 4 states for each stream
+        self.agent_states_num = 2   # 4 states for each stream
 
         self.is_memory_save = True
 
@@ -69,7 +69,6 @@ class wlanDQNController(DQNController):
         skipped_state_counter = 0
         active_action = []
         file_action_flag = -1  # -1: not file action, 1: file action
-        file_action_value = 0
         # hard embedding
         for device_name, links in self.graph.graph.items():
             for link_name, streams in links.items():
@@ -83,7 +82,7 @@ class wlanDQNController(DQNController):
                         ## system state each IC: rtt, target_rtt, cw
                         if "file" not in stream["file_name"]:
                             state.append(stream["rtt"])
-                            for _state_name in ["target_rtt", "cw", "aifs"]:
+                            for _state_name in ["target_rtt"]:
                                 state.append(
                                     self.graph.info_graph[device_name][link_name][
                                         stream_name
@@ -95,9 +94,6 @@ class wlanDQNController(DQNController):
                             ]
                         else:
                             file_action_flag = 1
-                            file_action_value = self.graph.info_graph[device_name][link_name][
-                                stream_name
-                            ]["throttle"]
                     else:
                         if "file" not in stream["file_name"]:
                             if not self.is_sorted:
@@ -108,7 +104,6 @@ class wlanDQNController(DQNController):
                                 ]  # -1 denote action not activated
 
         active_action.insert(0, file_action_flag)  # insert file action space in the first position
-        state.insert(0, file_action_value)  # insert fraction in the first position
         remain_state_len = self.max_state_num * self.agent_states_num - len(state)
         remain_action_len = self.max_action_num - len(active_action)
         [state.append(0) for i in range(remain_state_len)]

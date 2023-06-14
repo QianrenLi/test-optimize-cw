@@ -54,7 +54,7 @@ heuristic_fraction = 0.1
 
 
 ## ==================Constant parameter================================== ##
-_duration = 300
+_duration = 30
 START_POINT = 0
 control_period = 0.8
 DURATION = int(_duration * 1.7 + START_POINT * control_period)
@@ -71,7 +71,7 @@ is_collect = threading.Event()
 is_draw = threading.Event()
 is_writing = threading.Lock()
 is_network_use = threading.Event()
-is_stop = False
+is_stop = threading.Event()
 return_num = threading.Semaphore(0)
 ## ==================threading parameter================================= ##
 
@@ -638,7 +638,7 @@ def graph_plot():
     while True:
         # wait until is draw
         is_draw.wait()
-        if is_stop:
+        if is_stop.is_set():
             break
         _update_fig(fig, axs, data_graph)
         index += 1
@@ -659,17 +659,15 @@ def transmission_thread(graph):
     print(_sum_file_thru(_loop_apply(conn)))
     conn = _calc_rtt(graph)
     print(_rtt_port_associate(graph, _loop_apply(conn)))
-
+    is_stop.set()
 
 def DQN_training_thread():
-    import torch
-
-    global is_stop, wlanController
+    global wlanController
     loss_collect = 0
     counter = 0
     counter_max = 100
     while True:
-        if is_stop:
+        if is_stop.is_set():
             break
         is_network_use.wait()
         if wlanController.memory_counter > 4:
@@ -698,7 +696,7 @@ def DQN_training_thread():
 
 def control_thread(graph, time_limit, period, socks):  # create a control_thread
     # start control and collect data
-    global is_stop, system_return, throttle, data_graph, wlanController, heuristic_fraction
+    global system_return, throttle, data_graph, wlanController, heuristic_fraction
 
     control_times = 0
     conn = Connector()
@@ -708,6 +706,9 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
     his_fraction = heuristic_fraction
     is_network_use.set()
     while control_times < time_limit:
+        ## Determine break -- Generally speaking, it is not a good choice to use thread unsafe parameter as a condition
+        if is_stop.is_set():
+            break
         ## collect data
         for sock in socks:
             _buffer, _retry_idx = _loop_tx(sock, "statistics")
@@ -716,9 +717,8 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
             print("statistics return", _retry_idx, link_return)
             system_return.update({sock.link_name: link_return["body"]})
 
-        ## update graph
+        ## update graph: activate and deactivate function
         graph.update_graph(system_return)
-        # graph.show()
         ## DQN update and control
         try:
             is_network_use.wait()
@@ -767,7 +767,7 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
                 print("=" * 50)
                 print("Control Stop")
                 print("=" * 50)
-            ## set edca parameter
+            ## Get edca parameter
             edca_params = _edca_default_params(graph, controls)
             #  store cw value for plot
             for _device_name in controls:
@@ -777,7 +777,7 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
                         temp_idx.update({_device_name: []})
                     temp_cw[_device_name].append(controls[_device_name] / 50)
                     temp_idx[_device_name].append(control_times)
-
+            ## Set edca parameter
             _set_edca_parameter(conn, edca_params)
         ## plot data
         _extract_data_from_graph(graph, data_graph, control_times)
@@ -787,39 +787,10 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
         time.sleep(period)
     ##
     print("main thread stopping")
-    is_stop = True
     time.sleep(0.5)
     is_draw.set()
     print("main thread stopped")
     cost_f.close()
-
-
-## iterative training all the stream
-def iter_all_training_scenario(ind):
-    from itertools import combinations
-
-    _, _lists = tc.cw_training_case(DURATION)
-    for _ind in range(ind, len(_lists)):
-        for comb in combinations(_lists, _ind):
-            _graph, _ = tc.cw_training_case(DURATION)
-            port_id = 6201
-            for _link in comb:
-                _graph.ADD_STREAM(
-                    _link,
-                    port_number=port_id,
-                    file_name="proj_6.25MB.npy",
-                    duration=[0, DURATION],
-                    thru=6.25,
-                    tos=32,
-                    target_rtt=18,
-                    name="Proj",
-                )
-                port_id += 1
-            try:
-                transmission_thread(_graph)
-            except Exception as e:
-                print("===== {ind}-th transmission Error =====", e)
-                break
 
 
 def start_testing_threading(graph, ctl_prot):
@@ -851,16 +822,48 @@ def start_testing_threading(graph, ctl_prot):
     control_t.start()
 
 
+## iterative training all the stream
+def iter_all_training_scenario(ind):
+    from itertools import combinations
+    _, _lists = tc.cw_training_case()
+    for _ind in range(ind, len(_lists) + 1):
+        for _file_link in _lists:
+            for comb in combinations(_lists, _ind):
+                _graph, _ = tc.cw_training_case()
+                _graph.ADD_STREAM( port_number=6200, file_name="file_75MB.npy", duration=[
+                     0, DURATION], thru=0, tos=96, name= 'File')
+                port_id = 6201
+                for _link in comb:
+                    _graph.ADD_STREAM(
+                        _link,
+                        port_number=port_id,
+                        file_name="proj_6.25MB.npy",
+                        duration=[0, DURATION],
+                        thru=6.25,
+                        tos=32,
+                        target_rtt=18,
+                        name="Proj",
+                    )
+                    port_id += 1
+                try:
+                    is_stop.clear()
+                    start_testing_threading(_graph, "wlp")
+                except Exception as e:
+                    print("===== {ind}-th transmission Error =====", e)
+                    break
+
+
 def main(args):
     global experiment_name, wlanController
     experiment_name = args.experiment_name
-    graph = tc.cw_test_case(DURATION)
-    if args.scenario > 0:
-        _ip_extract(
-            "wlan\\|p2p\\|wlp\\|wlx", graph
-        )  # wlan - termux wifi ip  ; p2p - Wifi Direct ip
-        # wlp - Intel IC wifi ip ; wlx - Realtek IC (rtl8812au) wifi ip
-        _setup_ip(graph)
+    graph = tc.cw_training_case()
+
+    # wlan - termux wifi ip  ; p2p - Wifi Direct ip
+    # wlp - Intel IC wifi ip ; wlx - Realtek IC (rtl8812au) wifi ip
+    _ip_extract(
+        "wlan\\|p2p\\|wlp\\|wlx", graph
+    ) 
+    _setup_ip(graph)
     _add_ipc_port(graph)
     graph.show()
     wlanController = wlanDQNController(
@@ -871,20 +874,14 @@ def main(args):
         graph,
         batch_size=32,
     )
-    wlanController.init_action_guess()
+    # wlanController.init_action_guess()
     if args.load:
         wlanController.load_params("%s/temp/%s.pkl" % (abs_path, experiment_name))
     # exit()
     _set_manifest(graph)
-    if args.scenario > 0:
-        start_testing_threading(graph, "wlp")
-    else:
-        start_testing_threading(graph, "lo")
-    # transmission_thread(graph)
+    iter_all_training_scenario(1)
 
-    # push matlab plot to main thread
-    graph_plot()
-
+    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
