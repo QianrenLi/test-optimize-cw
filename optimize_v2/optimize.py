@@ -39,12 +39,8 @@ NATIVE_MOD.init_throttle_fraction.argtypes = [
     ctypes.POINTER(ctypes.c_float),
     ctypes.POINTER(ctypes.c_float),
 ]
-
-
 def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
     return (arr_type * len(arr))(*arr)
-
-
 ## ====================================================================== ##
 
 
@@ -75,7 +71,6 @@ is_stop = threading.Event()
 return_num = threading.Semaphore(0)
 ## ==================threading parameter================================= ##
 
-
 data_graph = {}
 throttle = {}
 system_return = {}
@@ -92,7 +87,6 @@ cost_f = open(
     "a+",
 )
 ## =======================DQN Controller================================= ##
-##
 
 temp_cw = {}
 temp_idx = {}
@@ -100,9 +94,9 @@ temp_idx = {}
 
 ## Result preprocessing component
 def _sum_file_thru(outputs):
-    '''
+    """
     From the output get by applying connector build from _transmission_block, calculate the summation of throughput
-    '''
+    """
     thrus = 0
     try:
         outputs = [n for n in outputs if n]
@@ -120,9 +114,9 @@ def _sum_file_thru(outputs):
 
 
 def _calc_rtt(graph):
-    '''
+    """
     Construct a rrt calculation ready connector waiting to be applied
-    '''
+    """
     conn = Connector()
 
     for device_name, links in graph.graph.items():
@@ -154,9 +148,9 @@ def _throttle_calc(graph: Graph):
 
 
 def _rtt_port_associate(graph, outputs):
-    '''
+    """
     Associate rtt value lists to the corresponding ports id (for better vision)
-    '''
+    """
     rtt_value = {}
     rtt_list = []
     idx = 0
@@ -175,12 +169,11 @@ def _rtt_port_associate(graph, outputs):
     return rtt_value
 
 
-
 ## ip setup component
-def _ip_extract(keyword:str, graph:Graph):
-    '''
+def _ip_extract(keyword: str, graph: Graph):
+    """
     Extract ip from controlled device, store ip table into temp/ip_table.json
-    '''
+    """
     conn = Connector()
     ip_table = {}
     for device_name, links in graph.graph.items():
@@ -209,9 +202,9 @@ def _ip_extract(keyword:str, graph:Graph):
 
 
 def _setup_ip(graph):
-    '''
+    """
     Set up ip stored in graph by the ip_table (requirement to setup the transmission)
-    '''
+    """
     with open("./temp/ip_table.json", "r") as ip_file:
         ip_table = json.load(ip_file)
 
@@ -222,9 +215,9 @@ def _setup_ip(graph):
 
 ## ipc communication component
 def _add_ipc_port(graph):
-    '''
+    """
     Add ipc port (remote and local) to graph
-    '''
+    """
     port = 11100
     for device_name in graph.graph.keys():
         for link_name in graph.graph[device_name].keys():
@@ -233,10 +226,10 @@ def _add_ipc_port(graph):
             port += 1
 
 
-def _loop_tx(sock:ipc_socket, *args):
-    '''
+def _loop_tx(sock: ipc_socket, *args):
+    """
     Continuous transmitting to the remote ipc socket until the transmission is successful
-    '''
+    """
     _retry_idx = 0
     while True:
         try:
@@ -251,9 +244,9 @@ def _loop_tx(sock:ipc_socket, *args):
 
 ## transmission component
 def _set_manifest(graph):
-    '''
+    """
     Setup config manifest required by tx to transmit
-    '''
+    """
     conn = Connector()
     # graph = Graph()
     # set manifest according to graph entries
@@ -307,9 +300,9 @@ def _set_manifest(graph):
 
 
 def _transmission_block(graph):
-    '''
+    """
     Construct a transmission ready connector waiting to be applied
-    '''
+    """
     conn = Connector()
     # start reception
     for device_name, links in graph.graph.items():
@@ -368,9 +361,9 @@ def _transmission_block(graph):
 
 
 def _loop_apply(conn):
-    '''
+    """
     Continuing apply the connector, fetch the result from remote until receiving outputs
-    '''
+    """
     conn.fetch()
     idx = 0
     while True:
@@ -387,15 +380,15 @@ def _loop_apply(conn):
 
 ## EDCA injection component
 def _edca_default_params(graph: Graph, controls: dict):
-    '''
-    Setup edca params prepared to be injected to remote 
-    '''
+    """
+    Setup edca params prepared to be injected to remote
+    """
     params = {}
 
     for link_name_tos in controls.keys():
         if "_" in link_name_tos:
             prot, tos, tx_device_name, _ = link_name_tos.split("_")
-            is_realtek = "--realtek" if prot == "wlx" else ""              
+            is_realtek = "--realtek" if prot == "wlx" else ""
             if tx_device_name in graph.graph:
                 params[link_name_tos] = {
                     "ac": tos_to_ac[tos],
@@ -408,9 +401,9 @@ def _edca_default_params(graph: Graph, controls: dict):
 
 
 def _set_edca_parameter(conn: Connector, params):
-    '''
+    """
     Inject EDCA parameter change to remote
-    '''
+    """
     for link_name_tos in params:
         device_name = link_name_tos.split("_")[2]
         conn.batch(device_name, "modify_edca", params[link_name_tos])
@@ -586,9 +579,9 @@ def _extract_data_from_graph(graph, data_graph, index):
 
 ## Control component
 def _update_file_stream_nums(graph):
-    '''
+    """
     Inbuilt function to calculate active file stream in graph
-    '''
+    """
     file_stream_nums = 0
     for device_name, links in graph.graph.items():
         for link_name, streams in links.items():
@@ -646,7 +639,7 @@ def _update_throttle_fraction(algorithm_type, graph, **kwargs):
     return 0.1
 
 
-## Main threading section 
+## Main threading section
 def plot_thread():
     global data_graph
     fig, axs = _init_figure()
@@ -701,7 +694,13 @@ def DQN_training_thread():
         is_network_use.set()
 
     wlanController.store_memory(
-        "%s/temp/%s-%d-%d" % (abs_path, experiment_name,wlanController.state_size, wlanController.action_size)
+        "%s/temp/%s-%d-%d"
+        % (
+            abs_path,
+            experiment_name,
+            wlanController.state_size,
+            wlanController.action_size,
+        )
         + "-"
         + time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
         + ".npy"
@@ -806,6 +805,7 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
     print("main thread stopped")
     cost_f.close()
 
+
 ## Threading Entry
 def start_testing_threading(graph, ctl_prot):
     # init_transmission thread
@@ -839,13 +839,21 @@ def start_testing_threading(graph, ctl_prot):
 ## Iterative training over all the stream
 def iter_all_training_scenario(ind):
     from itertools import combinations
+
     _, _lists = tc.cw_training_case()
     for _ind in range(ind, len(_lists) + 1):
         for _file_link in _lists:
             for comb in combinations(_lists, _ind):
                 _graph, _ = tc.cw_training_case()
-                _graph.ADD_STREAM( port_number=6200, file_name="file_75MB.npy", duration=[
-                     0, DURATION], thru=0, tos=96, name= 'File')
+                _graph.ADD_STREAM(
+                    _file_link,
+                    port_number=6200,
+                    file_name="file_75MB.npy",
+                    duration=[0, DURATION],
+                    thru=0,
+                    tos=96,
+                    name="File",
+                )
                 port_id = 6201
                 for _link in comb:
                     _graph.ADD_STREAM(
@@ -874,16 +882,14 @@ def main(args):
 
     # wlan - termux wifi ip  ; p2p - Wifi Direct ip
     # wlp - Intel IC wifi ip ; wlx - Realtek IC (rtl8812au) wifi ip
-    _ip_extract(
-        "wlan\\|p2p\\|wlp\\|wlx", graph
-    ) 
+    _ip_extract("wlan\\|p2p\\|wlp\\|wlx", graph)
     _setup_ip(graph)
     _add_ipc_port(graph)
     graph.show()
     wlanController = wlanDQNController(
         [i / 10 for i in range(1, 10, 1)],
-        [1, 3, 7 ,15, 31 ,63, 127, 255],            # CW value
-        [2, 3, 7, 15, 20, 25, 30 , 35 ],            # AIFSN 
+        [1, 3, 7, 15, 31, 63, 127, 255],  # CW value
+        [2, 3, 7, 15, 20, 25, 30, 35],  # AIFSN
         10000,
         graph,
         batch_size=32,
@@ -895,9 +901,6 @@ def main(args):
     _set_manifest(graph)
     iter_all_training_scenario(1)
 
-    #plot_thread()
-
-    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

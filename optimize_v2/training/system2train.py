@@ -25,6 +25,8 @@ class wlanDQNController(DQNController):
         graph: Graph,
         batch_size=16,
         gamma=0.9,
+        max_agent_num = 4,
+        max_action_num = 4
     ) -> None:
         self.graph = graph
         self.log_path = "./training/logs/log-loss-%s.txt" % time.strftime(
@@ -34,11 +36,11 @@ class wlanDQNController(DQNController):
         self.training_counter = 0
         self.is_sorted = False
 
-        self.max_agent_num = 3  # max num of streams
-        self.max_action_num = 5  # max num of controllable streams
+        self.max_agent_num = max_agent_num         # max num of streams
+        self.max_action_num = max_action_num       # max num of controllable streams
 
-        self.agent_action_num = 2  # each rtt agent action nums
-        self.agent_states_num = 2   # 4 states for each stream
+        self.agent_action_num = 2           # each rtt agent action nums
+        self.agent_states_num = 2           # 4 states for each stream
 
         self.is_memory_save = True
 
@@ -51,10 +53,10 @@ class wlanDQNController(DQNController):
                         action_space.append(cw_levels)  # cw action for each stream
                         action_space.append(aifs_levels)  # AIFS action for each stream
 
-        remain_len = self.max_action_num * self.agent_action_num + 1  - len(action_space)
-        [action_space.append(cw_levels) for i in range(remain_len)]
+        remain_len = ((self.max_action_num * self.agent_action_num + 1  - len(action_space))) // 2
+        [[action_space.append(cw_levels), action_space.append(aifs_levels)] for i in range(remain_len)]
         super().__init__(
-            self.max_state_num * self.agent_states_num,
+            self.max_agent_num * self.agent_states_num,
             action_space,
             memory_size,
             batch_size,
@@ -104,13 +106,12 @@ class wlanDQNController(DQNController):
                                 ]  # -1 denote action not activated
 
         active_action.insert(0, file_action_flag)  # insert file action space in the first position
-        remain_state_len = self.max_state_num * self.agent_states_num - len(state)
-        remain_action_len = self.max_action_num - len(active_action)
+        remain_state_len = self.max_agent_num * self.agent_states_num - len(state)
+        remain_action_len = (self.max_action_num * self.agent_action_num + 1 - len(active_action)) // 2
         [state.append(0) for i in range(remain_state_len)]
-        [active_action.append(-1) for i in range(remain_action_len)]
+        [[active_action.append(-1) for _i in range(self.agent_action_num)] for i in range(remain_action_len)]
 
         self.active_action = active_action
-        print(active_action)
         return np.array(state)
 
     def init_action_guess(self):                            # SOlution for initial action required to training
@@ -153,7 +154,7 @@ class wlanDQNController(DQNController):
                                 ].update({action_name: action[idx + _idx]})
                                 _control.update({action_name: action[idx + _idx]})
                             control.update(
-                                {prot + "_" + tos + sender + "_" + receiver: _control}
+                                {prot + "_" + tos + "_" + sender + "_" + receiver: _control}
                             )
                             idx += self.agent_action_num
                         elif not self.is_sorted:
@@ -180,7 +181,7 @@ class wlanDQNController(DQNController):
                             # cost += stream["rtt"] * 1000 > target_rtt
                             cost += abs(stream["rtt"] * 1000 - target_rtt)
         # cost -= fraction
-        print("cost", cost)
+        # print("cost", cost)
         return cost
 
     def training_network(self):
@@ -194,17 +195,46 @@ class wlanDQNController(DQNController):
 if __name__ == "__main__":
     import test_case as tc
 
-    graph = tc.cw_test_case(50)
+    graph,lists = tc.cw_training_case()
     # graph.info_graph["phone"]["wlan_phone_"]["6201@96"]["active"] = False
-    graph.show()
-    wlanController = wlanDQNController([0.1, 0.2, 0.3], [1, 15], 50, graph)
+    graph.ADD_STREAM(
+        lists[0],
+        port_number=6200,
+        file_name="file_75MB.npy",
+        duration=[0, 50],
+        thru=0,
+        tos=96,
+        name="File",
+    )
+    port_id = 6201
+    for lnk in lists: 
+        graph.ADD_STREAM(
+            lnk,
+            port_number=port_id,
+            file_name="proj_6.25MB.npy",
+            duration=[0, 50],
+            thru=6.25,
+            tos=32,
+            target_rtt=18,
+            name="Proj",
+        )
+    # graph.show()
+    wlanController = wlanDQNController(
+        [i / 10 for i in range(1, 10, 1)],
+        [1, 3, 7, 15, 31, 63, 127, 255],    # CW value
+        [2, 3, 7, 15, 20, 25, 30, 35],      # AIFSN
+        10000,
+        graph,
+        batch_size=32,
+        
+    )
     # print(wlanController.get_state())
     state = wlanController.get_state()
     action, _ = wlanController.action_to_control(wlanController.get_state())
-    print(action)
+    # print(action)
     fraction = action["fraction"]
     cost = wlanController.get_cost(fraction)
     state_ = wlanController.get_state()
-    print(cost)
+    # print(cost)
     wlanController.store_transition(state, _, cost, state_)
 
