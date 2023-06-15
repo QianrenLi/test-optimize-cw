@@ -98,7 +98,89 @@ temp_cw = {}
 temp_idx = {}
 
 
-def _ip_extract(keyword, graph):
+## Result preprocessing component
+def _sum_file_thru(outputs):
+    '''
+    From the output get by applying connector build from _transmission_block, calculate the summation of throughput
+    '''
+    thrus = 0
+    try:
+        outputs = [n for n in outputs if n]
+        print(outputs)
+        for output in outputs:
+            output = eval(output["file_thru"])
+            if type(output) == float:
+                thrus += output
+            else:
+                thrus += float(output[0])
+        return thrus
+    except Exception as e:
+        print(outputs)
+    return 0
+
+
+def _calc_rtt(graph):
+    '''
+    Construct a rrt calculation ready connector waiting to be applied
+    '''
+    conn = Connector()
+
+    for device_name, links in graph.graph.items():
+        for link_name, streams in links.items():
+            prot, sender, receiver = link_name.split("_")
+            for stream_name, stream in streams.items():
+                port, tos = stream_name.split("@")
+                if stream["thru"] != 0:
+                    conn.batch(sender, "read_rtt", {"port": port, "tos": tos}).wait(0.1)
+    return conn.executor.wait(0.5)
+
+
+def _throttle_calc(graph: Graph):
+    global file_stream_nums, this_throttle_fraction
+    # detect whether the num of file stream changes
+    current_file_stream_nums = _update_file_stream_nums(graph)
+    reset_flag = file_stream_nums == 0 and current_file_stream_nums != 0
+    # this_throttle_fraction = _update_throttle_fraction(
+    #     "one_dimensional_search", graph)
+    this_throttle_fraction = heuristic_fraction
+    # update throttle
+    # print("this_throttle_fraction", this_throttle_fraction)
+    if this_throttle_fraction:
+        file_stream_nums = current_file_stream_nums
+        port_throttle = graph.update_throttle(this_throttle_fraction, reset_flag)
+    else:
+        port_throttle = None
+    return port_throttle
+
+
+def _rtt_port_associate(graph, outputs):
+    '''
+    Associate rtt value lists to the corresponding ports id (for better vision)
+    '''
+    rtt_value = {}
+    rtt_list = []
+    idx = 0
+    for device_name, links in graph.graph.items():
+        for link_name, streams in links.items():
+            prot, sender, receiver = link_name.split("_")
+            for stream_name, stream in streams.items():
+                port, tos = stream_name.split("@")
+                if stream["thru"] != 0:
+                    rtt_value.update({stream_name: float(outputs[idx]["rtt"])})
+                    rtt_list.append(float(outputs[idx]["rtt"]))
+                    idx += 1
+    import numpy as np
+
+    print(np.round(np.array(rtt_list) * 1000, 3))
+    return rtt_value
+
+
+
+## ip setup component
+def _ip_extract(keyword:str, graph:Graph):
+    '''
+    Extract ip from controlled device, store ip table into temp/ip_table.json
+    '''
     conn = Connector()
     ip_table = {}
     for device_name, links in graph.graph.items():
@@ -126,21 +208,35 @@ def _ip_extract(keyword, graph):
         json.dump(ip_table, f)
 
 
-def _update_file_stream_nums(graph):
-    file_stream_nums = 0
-    for device_name, links in graph.graph.items():
-        for link_name, streams in links.items():
-            for stream_name, stream in streams.items():
-                if (
-                    "file" in stream["file_name"]
-                    and graph.info_graph[device_name][link_name][stream_name]["active"]
-                    == True
-                ):
-                    file_stream_nums += 1
-    return file_stream_nums
+def _setup_ip(graph):
+    '''
+    Set up ip stored in graph by the ip_table (requirement to setup the transmission)
+    '''
+    with open("./temp/ip_table.json", "r") as ip_file:
+        ip_table = json.load(ip_file)
+
+    for device_name in ip_table.keys():
+        for protocol, ip in ip_table[device_name].items():
+            graph.associate_ip(device_name, protocol, ip)
 
 
-def _loop_tx(sock, *args):
+## ipc communication component
+def _add_ipc_port(graph):
+    '''
+    Add ipc port (remote and local) to graph
+    '''
+    port = 11100
+    for device_name in graph.graph.keys():
+        for link_name in graph.graph[device_name].keys():
+            graph.info_graph[device_name][link_name].update({"ipc_port": port})
+            graph.info_graph[device_name][link_name].update({"local_port": port - 1024})
+            port += 1
+
+
+def _loop_tx(sock:ipc_socket, *args):
+    '''
+    Continuous transmitting to the remote ipc socket until the transmission is successful
+    '''
     _retry_idx = 0
     while True:
         try:
@@ -153,15 +249,67 @@ def _loop_tx(sock, *args):
     return _buffer, _retry_idx
 
 
-def _blocking_wait(return_num, graph):
-    return_num.release()
+## transmission component
+def _set_manifest(graph):
+    '''
+    Setup config manifest required by tx to transmit
+    '''
+    conn = Connector()
+    # graph = Graph()
+    # set manifest according to graph entries
+    parameter_template = {
+        "manifest_name": "manifest.json",
+        "stream_idx": 0,
+        "port": 0,
+        "file_name": "",
+        "tos": 100,
+        "calc_rtt": False,
+        "no_logging": True,
+        "start": 0,
+        "stop": 10,
+        "throttle": 0,
+    }
     for device_name, links in graph.graph.items():
+
         for link_name, streams in links.items():
-            return_num._value -= 1
-    return_num.acquire()
+            # init stream
+            _init_parameters = []
+            conn.batch(
+                device_name,
+                "init_stream",
+                {"stream_num": len(streams), "manifest_name": link_name + ".json"},
+            ).wait(0.5).apply()
+            # add detail to manifest
+            for port_number, stream in streams.items():
+                parameter = parameter_template.copy()
+                prot_tos = port_number.split("@")
+                parameter.update({"manifest_name": link_name + ".json"})
+                parameter.update({"port": int(prot_tos[0])})
+                parameter.update({"tos": int(prot_tos[1])})
+                parameter.update({"file_name": stream["file_name"]})
+                if "file" not in stream["file_name"]:
+                    parameter.update({"calc_rtt": True})
+                    parameter.update({"no_logging": False})
+                else:
+                    parameter.update({"throttle": 30})
+                parameter.update({"start": stream["duration"][0]})
+                parameter.update({"stop": stream["duration"][1]})
+                _init_parameters.append(parameter)
+            # write detailed to device
+            for i, _parameter in enumerate(_init_parameters):
+                conn.batch(
+                    device_name, "init_stream_para", {**_parameter, **{"stream_idx": i}}
+                )
+                print({**_parameter, **{"stream_idx": i}})
+                conn.executor.wait(0.5)
+            conn.executor.wait(0.5).apply()
+    pass
 
 
 def _transmission_block(graph):
+    '''
+    Construct a transmission ready connector waiting to be applied
+    '''
     conn = Connector()
     # start reception
     for device_name, links in graph.graph.items():
@@ -219,20 +367,10 @@ def _transmission_block(graph):
     return conn.executor.wait(DURATION + 5)
 
 
-def _calc_rtt(graph):
-    conn = Connector()
-
-    for device_name, links in graph.graph.items():
-        for link_name, streams in links.items():
-            prot, sender, receiver = link_name.split("_")
-            for stream_name, stream in streams.items():
-                port, tos = stream_name.split("@")
-                if stream["thru"] != 0:
-                    conn.batch(sender, "read_rtt", {"port": port, "tos": tos}).wait(0.1)
-    return conn.executor.wait(0.5)
-
-
 def _loop_apply(conn):
+    '''
+    Continuing apply the connector, fetch the result from remote until receiving outputs
+    '''
     conn.fetch()
     idx = 0
     while True:
@@ -247,88 +385,32 @@ def _loop_apply(conn):
             break
 
 
-def _sum_file_thru(outputs):
-    thrus = 0
-    try:
-        outputs = [n for n in outputs if n]
-        print(outputs)
-        for output in outputs:
-            output = eval(output["file_thru"])
-            if type(output) == float:
-                thrus += output
-            else:
-                thrus += float(output[0])
-        return thrus
-    except Exception as e:
-        print(outputs)
-    return 0
-
-
-def _rtt_port_associate(graph, outputs):
-    rtt_value = {}
-    rtt_list = []
-    idx = 0
-    for device_name, links in graph.graph.items():
-        for link_name, streams in links.items():
-            prot, sender, receiver = link_name.split("_")
-            for stream_name, stream in streams.items():
-                port, tos = stream_name.split("@")
-                if stream["thru"] != 0:
-                    rtt_value.update({stream_name: float(outputs[idx]["rtt"])})
-                    rtt_list.append(float(outputs[idx]["rtt"]))
-                    idx += 1
-    import numpy as np
-
-    print(np.round(np.array(rtt_list) * 1000, 3))
-    return rtt_value
-
-
-def _add_ipc_port(graph):
-    port = 11100
-    for device_name in graph.graph.keys():
-        for link_name in graph.graph[device_name].keys():
-            graph.info_graph[device_name][link_name].update({"ipc_port": port})
-            graph.info_graph[device_name][link_name].update({"local_port": port - 1024})
-            port += 1
-
-
-def _name_tunnel(input_string):
-    # using lambda and regex functions to tune the name
-    return re.compile("|".join(name_dict.keys())).sub(
-        lambda ele: name_dict[re.escape(ele.group(0))], input_string
-    )
-
-
-def _get_graph(scenario, DURATION):
-    if scenario == 1:
-        return tc.get_scenario_1_graph(DURATION)
-    elif scenario == 2:
-        return tc.get_scenario_2_graph(DURATION)
-    elif scenario == 3:
-        return tc.get_scenario_3_graph(DURATION)
-    else:
-        return tc.get_scenario_local_test(DURATION)
-
-
+## EDCA injection component
 def _edca_default_params(graph: Graph, controls: dict):
+    '''
+    Setup edca params prepared to be injected to remote 
+    '''
     params = {}
 
     for link_name_tos in controls.keys():
         if "_" in link_name_tos:
             prot, tos, tx_device_name, _ = link_name_tos.split("_")
-            realtek = "--realtek" if prot == "wlx" else ""
+            is_realtek = "--realtek" if prot == "wlx" else ""              
             if tx_device_name in graph.graph:
                 params[link_name_tos] = {
                     "ac": tos_to_ac[tos],
                     "cw_min": int(controls[link_name_tos]),
                     "cw_max": int(controls[link_name_tos]),
                     "aifs": -1,
-                    "realtek": realtek,
+                    "realtek": is_realtek,
                 }
     return params
 
 
 def _set_edca_parameter(conn: Connector, params):
+    '''
+    Inject EDCA parameter change to remote
+    '''
     for link_name_tos in params:
         device_name = link_name_tos.split("_")[2]
         conn.batch(device_name, "modify_edca", params[link_name_tos])
@@ -337,74 +419,7 @@ def _set_edca_parameter(conn: Connector, params):
     return conn
 
 
-def _set_manifest(graph):
-    conn = Connector()
-    # graph = Graph()
-    # set manifest according to graph entries
-    parameter_template = {
-        "manifest_name": "manifest.json",
-        "stream_idx": 0,
-        "port": 0,
-        "file_name": "",
-        "tos": 100,
-        "calc_rtt": False,
-        "no_logging": True,
-        "start": 0,
-        "stop": 10,
-        "throttle": 0,
-    }
-    for device_name, links in graph.graph.items():
-
-        for link_name, streams in links.items():
-            # init stream
-            _init_parameters = []
-            conn.batch(
-                device_name,
-                "init_stream",
-                {"stream_num": len(streams), "manifest_name": link_name + ".json"},
-            ).wait(0.5).apply()
-            # add detail to manifest
-            for port_number, stream in streams.items():
-                parameter = parameter_template.copy()
-                prot_tos = port_number.split("@")
-                parameter.update({"manifest_name": link_name + ".json"})
-                parameter.update({"port": int(prot_tos[0])})
-                parameter.update({"tos": int(prot_tos[1])})
-                parameter.update({"file_name": stream["file_name"]})
-                if "file" not in stream["file_name"]:
-                    parameter.update({"calc_rtt": True})
-                    parameter.update({"no_logging": False})
-                else:
-                    parameter.update({"throttle": 30})
-                parameter.update({"start": stream["duration"][0]})
-                parameter.update({"stop": stream["duration"][1]})
-                _init_parameters.append(parameter)
-            # write detailed to device
-            for i, _parameter in enumerate(_init_parameters):
-                conn.batch(
-                    device_name, "init_stream_para", {**_parameter, **{"stream_idx": i}}
-                )
-                print({**_parameter, **{"stream_idx": i}})
-                conn.executor.wait(0.5)
-            conn.executor.wait(0.5).apply()
-    pass
-
-
-# function to set up ip address for each device
-
-
-def _setup_ip(graph):
-    with open("./temp/ip_table.json", "r") as ip_file:
-        ip_table = json.load(ip_file)
-
-    for device_name in ip_table.keys():
-        for protocol, ip in ip_table[device_name].items():
-            graph.associate_ip(device_name, protocol, ip)
-
-
-# function for picture updating
-
-
+## Ongoing plot component
 def _init_figure():
     lines = []
     axs = []
@@ -569,6 +584,24 @@ def _extract_data_from_graph(graph, data_graph, index):
     pass
 
 
+## Control component
+def _update_file_stream_nums(graph):
+    '''
+    Inbuilt function to calculate active file stream in graph
+    '''
+    file_stream_nums = 0
+    for device_name, links in graph.graph.items():
+        for link_name, streams in links.items():
+            for stream_name, stream in streams.items():
+                if (
+                    "file" in stream["file_name"]
+                    and graph.info_graph[device_name][link_name][stream_name]["active"]
+                    == True
+                ):
+                    file_stream_nums += 1
+    return file_stream_nums
+
+
 def _update_throttle_fraction(algorithm_type, graph, **kwargs):
     # get target value from info graph
     target_rtt = 1000
@@ -613,25 +646,8 @@ def _update_throttle_fraction(algorithm_type, graph, **kwargs):
     return 0.1
 
 
-def _throttle_calc(graph: Graph):
-    global file_stream_nums, this_throttle_fraction
-    # detect whether the num of file stream changes
-    current_file_stream_nums = _update_file_stream_nums(graph)
-    reset_flag = file_stream_nums == 0 and current_file_stream_nums != 0
-    # this_throttle_fraction = _update_throttle_fraction(
-    #     "one_dimensional_search", graph)
-    this_throttle_fraction = heuristic_fraction
-    # update throttle
-    # print("this_throttle_fraction", this_throttle_fraction)
-    if this_throttle_fraction:
-        file_stream_nums = current_file_stream_nums
-        port_throttle = graph.update_throttle(this_throttle_fraction, reset_flag)
-    else:
-        port_throttle = None
-    return port_throttle
-
-
-def graph_plot():
+## Main threading section 
+def plot_thread():
     global data_graph
     fig, axs = _init_figure()
     index = 0
@@ -651,15 +667,13 @@ def graph_plot():
     plt.close(fig)
 
 
-# create a sub-threading to send data given an ipc socket
-
-
 def transmission_thread(graph):
     conn = _transmission_block(graph)
     print(_sum_file_thru(_loop_apply(conn)))
     conn = _calc_rtt(graph)
     print(_rtt_port_associate(graph, _loop_apply(conn)))
     is_stop.set()
+
 
 def DQN_training_thread():
     global wlanController
@@ -792,7 +806,7 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
     print("main thread stopped")
     cost_f.close()
 
-
+## Threading Entry
 def start_testing_threading(graph, ctl_prot):
     # init_transmission thread
     tx_thread = threading.Thread(target=transmission_thread, args=(graph,))
@@ -822,7 +836,7 @@ def start_testing_threading(graph, ctl_prot):
     control_t.start()
 
 
-## iterative training all the stream
+## Iterative training over all the stream
 def iter_all_training_scenario(ind):
     from itertools import combinations
     _, _lists = tc.cw_training_case()
@@ -880,6 +894,8 @@ def main(args):
     # exit()
     _set_manifest(graph)
     iter_all_training_scenario(1)
+
+    #plot_thread()
 
     
 
