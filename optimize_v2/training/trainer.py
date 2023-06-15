@@ -290,6 +290,7 @@ class DQNController:
 
             # zero gradient
             loss.backward()
+            # set allowable maximum gradient
             torch.nn.utils.clip_grad_value_(self.action_net.parameters(), 100)
             # update network
             self.action_opt.step()
@@ -297,8 +298,7 @@ class DQNController:
         if self.train_counter >= self.train_counter_max:
             self.train_counter = 0
             self.parameter_replace()
-            # print("Parameter replace")
-        # print("loss\t",loss.item())
+
         return loss.item()
 
 

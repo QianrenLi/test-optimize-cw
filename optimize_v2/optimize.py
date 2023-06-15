@@ -49,7 +49,7 @@ heuristic_fraction = 0.1
 ## ==========================test======================================== ##
 
 
-## ==================Constant parameter================================== ##
+## ==================Config parameters================================== ##
 _duration = 30
 START_POINT = 0
 control_period = 0.8
@@ -58,7 +58,8 @@ rx_DURATION = int(DURATION)
 CONTROL_ON = True
 control_times = (DURATION - _duration * 0.7) / control_period
 experiment_name = "test"
-## ==================Constant parameter================================== ##
+dynamic_plotting = False
+## ==================Config parameter================================== ##
 
 
 ## ==================threading parameter================================= ##
@@ -793,8 +794,9 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
             ## Set edca parameter
             _set_edca_parameter(conn, edca_params)
         ## plot data
-        _extract_data_from_graph(graph, data_graph, control_times)
-        is_draw.set()
+        if dynamic_plotting:
+            _extract_data_from_graph(graph, data_graph, control_times)
+            is_draw.set()
         ## sleep
         control_times += 1
         time.sleep(period)
@@ -870,6 +872,7 @@ def iter_all_training_scenario(ind):
                 try:
                     is_stop.clear()
                     start_testing_threading(_graph, "wlp")
+                    is_stop.wait()                                      # wait until all thread stop
                 except Exception as e:
                     print("===== {ind}-th transmission Error =====", e)
                     break
@@ -894,12 +897,13 @@ def main(args):
         graph,
         batch_size=32,
     )
-    # wlanController.init_action_guess()
     if args.load:
         wlanController.load_params("%s/temp/%s.pkl" % (abs_path, experiment_name))
     # exit()
     _set_manifest(graph)
     iter_all_training_scenario(1)
+    if dynamic_plotting:
+        plot_thread()
 
 
 if __name__ == "__main__":

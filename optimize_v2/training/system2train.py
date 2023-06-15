@@ -67,6 +67,10 @@ class wlanDQNController(DQNController):
         self.graph = graph
 
     def get_state(self):
+        """
+        Get the state of the system;
+        From system state conclude corresponding active action -> how many rtt stream, is file stream exist.
+        """
         state = []
         skipped_state_counter = 0
         active_action = []
@@ -83,6 +87,7 @@ class wlanDQNController(DQNController):
                     ):
                         ## system state each IC: rtt, target_rtt, cw
                         if "file" not in stream["file_name"]:
+                            #
                             state.append(stream["rtt"])
                             for _state_name in ["target_rtt"]:
                                 state.append(
@@ -90,6 +95,7 @@ class wlanDQNController(DQNController):
                                         stream_name
                                     ][_state_name]
                                 )
+                            # 
                             [
                                 active_action.append(1)
                                 for _ in range(self.agent_action_num)
@@ -115,7 +121,6 @@ class wlanDQNController(DQNController):
         return np.array(state)
 
     def init_action_guess(self):                            # SOlution for initial action required to training
-        action = []
         default_action = {"cw": 3, "aifs": 3, "throttle": 0.6}
         for device_name, links in self.graph.graph.items():
             for link_name, streams in links.items():
@@ -177,6 +182,7 @@ class wlanDQNController(DQNController):
                         ]
                         == True
                     ):
+                        # cost += 1
                         if target_rtt != 0 and stream["rtt"] is not None:
                             # cost += stream["rtt"] * 1000 > target_rtt
                             cost += abs(stream["rtt"] * 1000 - target_rtt)
@@ -207,7 +213,7 @@ if __name__ == "__main__":
         name="File",
     )
     port_id = 6201
-    for lnk in lists: 
+    for lnk in lists[0:2]: 
         graph.ADD_STREAM(
             lnk,
             port_number=port_id,
@@ -237,4 +243,7 @@ if __name__ == "__main__":
     state_ = wlanController.get_state()
     # print(cost)
     wlanController.store_transition(state, _, cost, state_)
+    # print(state, _, cost, state_)
+    abs_path = os.path.dirname(os.path.abspath(__file__))
+    wlanController.store_memory(abs_path+"/saved_data/temp.npy")
 
