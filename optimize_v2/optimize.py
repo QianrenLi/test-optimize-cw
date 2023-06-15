@@ -902,6 +902,7 @@ def main(args):
     # exit()
     _set_manifest(graph)
     iter_all_training_scenario(1)
+    # TODO: fix dynamic plot issue
     if dynamic_plotting:
         plot_thread()
 
