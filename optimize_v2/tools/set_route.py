@@ -74,7 +74,7 @@ def write_sys_conf(info, path):
     if_name_Realtek = None
     for if_name in info.keys():
         if_name_Intel = if_name if "wlp" in if_name else if_name_Intel
-        if_name_Realtek = if_name if "wlx" in if_name else "test"
+        if_name_Realtek = if_name if "wlx" in if_name else if_name_Realtek
     print([if_name_Intel, if_name_Realtek])
     if None not in [if_name_Intel, if_name_Realtek]:
         print("start write")
