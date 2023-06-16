@@ -27,12 +27,12 @@ def init_info():
     return info
 
 ## Setup route table
-def route_setup(info, type, table_id, netmask=24):
+def route_setup(info, if_type, table_id, netmask=24):
     for if_name in info.keys():
-        ip_addr = ip_network(info[if_name] + "/" + str(netmask), strict=False)
-        # get default first host as gateway from ip_addr
-        gateway = str(ip_addr[1])
-        if type in if_name:
+        if if_type in if_name:
+            ip_addr = ip_network(info[if_name] + "/" + str(netmask), strict=False)
+            # get default first host as gateway from ip_addr
+            gateway = str(ip_addr[1])
             cmd = "sudo ip route add " + str(ip_addr) + " dev " + if_name + " proto kernel scope link src " + info[if_name] + " table " + str(table_id)
             cmd = cmd + " && sudo ip route add default via " + gateway + " table " + str(table_id)
             cmd = cmd + " && sudo ip rule add from " + info[if_name] + " table " + str(table_id)
