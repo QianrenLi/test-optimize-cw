@@ -1,8 +1,7 @@
 import psutil
 from ipaddress import ip_network
-import subprocess
 import argparse
-# import os
+import os
 
 ## Setup route table for Intel card and Realtek card
 def two_IC_setup():
@@ -44,7 +43,7 @@ def route_setup(info, type, table_id, netmask=24):
 
 ## Subprocess run cmd
 def run_cmd(cmd):
-    subprocess.run(cmd)
+    os.system(cmd)
 
 def sys_conf_init():
     path = "/etc/sysctl.conf"
