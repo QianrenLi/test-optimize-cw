@@ -36,6 +36,8 @@ class ipc_socket():
         self.send_cmd(*args)
         _buffer, addr = self.sock.recvfrom(2048)
         return _buffer
+    def ipc_transmit(self, *args):
+        self.send_cmd(*args)
 
     def close(self):
         self.sock.close()
@@ -46,7 +48,7 @@ def main(args):
     sock = ipc_socket(args.ip_addr, args.port)
     # generate a request
     while True:
-        print(sock.ipc_communicate('statistics'))
+        print(sock.ipc_communicate('throttle',{}))
         sock.close()
         exit()
 

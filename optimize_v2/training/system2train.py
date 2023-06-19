@@ -44,6 +44,9 @@ class wlanDQNController(DQNController):
 
         self.is_memory_save = True
 
+        self._rtt_threshold = 0.04                      # In (s), constraint state
+        self._cost_threshold = 100               # Clip the cost  
+
         action_space = []
         action_space.append(file_levels)
         for device_name, links in graph.graph.items():
@@ -87,8 +90,12 @@ class wlanDQNController(DQNController):
                     ):
                         ## system state each IC: rtt, target_rtt, cw
                         if "file" not in stream["file_name"]:
-                            #
-                            state.append(stream["rtt"])
+                            ##
+                            if stream["rtt"] < self._rtt_threshold:
+                                state.append(stream["rtt"])
+                            else:
+                                state.append(self._rtt_threshold)
+
                             for _state_name in ["target_rtt"]:
                                 state.append(
                                     self.graph.info_graph[device_name][link_name][
@@ -185,7 +192,8 @@ class wlanDQNController(DQNController):
                         # cost += 1
                         if target_rtt != 0 and stream["rtt"] is not None:
                             # cost += stream["rtt"] * 1000 > target_rtt
-                            cost += abs(stream["rtt"] * 1000 - target_rtt)
+                            _cost = abs(stream["rtt"] * 1000 - target_rtt)
+                            cost += _cost if _cost < self._cost_threshold else self._cost_threshold
         # cost -= fraction
         # print("cost", cost)
         return cost
@@ -217,9 +225,9 @@ if __name__ == "__main__":
         graph.ADD_STREAM(
             lnk,
             port_number=port_id,
-            file_name="proj_6.25MB.npy",
+            file_name="voice_0.05MB.npy",
             duration=[0, 50],
-            thru=6.25,
+            thru=0.05,
             tos=32,
             target_rtt=18,
             name="Proj",

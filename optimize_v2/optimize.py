@@ -15,6 +15,8 @@ import argparse
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
+import traceback
+
 abs_path = os.path.dirname(os.path.abspath(__file__))
 COLORS = (
     plt.rcParams["axes.prop_cycle"].by_key()["color"]
@@ -45,18 +47,18 @@ def _list_to_c_array(arr: list, arr_type=ctypes.c_float):
 
 
 ## ==========================test======================================== ##
-heuristic_fraction = 0.1
+heuristic_fraction = 0.3
 ## ==========================test======================================== ##
 
 
 ## ==================Config parameters================================== ##
-_duration = 30
+_duration = 150
 START_POINT = 0
-control_period = 0.8
-DURATION = int(_duration * 1.7 + START_POINT * control_period)
+control_period = 1
+DURATION = int(_duration + START_POINT * control_period)
 rx_DURATION = int(DURATION)
 CONTROL_ON = True
-control_times = (DURATION - _duration * 0.7) / control_period
+control_times = (DURATION ) / control_period
 experiment_name = "test"
 dynamic_plotting = False
 ## ==================Config parameter================================== ##
@@ -69,6 +71,7 @@ is_draw = threading.Event()
 is_writing = threading.Lock()
 is_network_use = threading.Event()
 is_stop = threading.Event()
+is_control_stop = threading.Event()
 return_num = threading.Semaphore(0)
 ## ==================threading parameter================================= ##
 
@@ -219,7 +222,7 @@ def _add_ipc_port(graph):
     """
     Add ipc port (remote and local) to graph
     """
-    port = 11100
+    port = 8888
     for device_name in graph.graph.keys():
         for link_name in graph.graph[device_name].keys():
             graph.info_graph[device_name][link_name].update({"ipc_port": port})
@@ -232,13 +235,18 @@ def _loop_tx(sock: ipc_socket, *args):
     Continuous transmitting to the remote ipc socket until the transmission is successful
     """
     _retry_idx = 0
+    print("Collect\t", sock.link_name)
     while True:
         try:
             _buffer = sock.ipc_communicate(*args)
             break
         except Exception as e:
             print(e)
+            if is_stop.is_set():
+                _buffer = None
+                break
             _retry_idx += 1
+            print("timeout\t", sock.link_name)
             continue
     return _buffer, _retry_idx
 
@@ -283,7 +291,6 @@ def _set_manifest(graph):
                 parameter.update({"file_name": stream["file_name"]})
                 if "file" not in stream["file_name"]:
                     parameter.update({"calc_rtt": True})
-                    parameter.update({"no_logging": False})
                 else:
                     parameter.update({"throttle": 30})
                 parameter.update({"start": stream["duration"][0]})
@@ -393,9 +400,9 @@ def _edca_default_params(graph: Graph, controls: dict):
             if tx_device_name in graph.graph:
                 params[link_name_tos] = {
                     "ac": tos_to_ac[tos],
-                    "cw_min": int(controls[link_name_tos]),
-                    "cw_max": int(controls[link_name_tos]),
-                    "aifs": -1,
+                    "cw_min": int(controls[link_name_tos]["cw"]),
+                    "cw_max": int(controls[link_name_tos]["cw"]),
+                    "aifs": int(controls[link_name_tos]["aifs"]),
                     "realtek": is_realtek,
                 }
     return params
@@ -408,8 +415,8 @@ def _set_edca_parameter(conn: Connector, params):
     for link_name_tos in params:
         device_name = link_name_tos.split("_")[2]
         conn.batch(device_name, "modify_edca", params[link_name_tos])
-        conn.executor.wait(0.01)
-    conn.executor.wait(0.01).apply()
+        conn.executor.wait(0.1)
+    conn.executor.wait(0.1).apply()
     return conn
 
 
@@ -447,17 +454,18 @@ def _update_fig(fig, axs, data_graph):
                         if idx_to_key[_idx] in stream.keys():
                             if idx_to_key[_idx] == "throttles":
                                 for _temp_key in temp_cw:
-                                    c = next(colors_iter)
-                                    vector_y = temp_cw[_temp_key]
-                                    vector_x = (
-                                        np.array(temp_idx[_temp_key])
-                                    ) * control_period
-                                    (_line,) = axs[_idx].plot(
-                                        range(len(vector_x)), ".-", color=c
-                                    )
-                                    _line.set_xdata(vector_x)
-                                    _line.set_ydata(vector_y)
-                                    legends.append("cw-%s" % _temp_key)
+                                    for _temp_action in temp_cw[_temp_key]:
+                                        c = next(colors_iter)
+                                        vector_y = temp_cw[_temp_key][_temp_action]
+                                        vector_x = (
+                                            np.array(temp_idx[_temp_key][_temp_action])
+                                        ) * control_period
+                                        (_line,) = axs[_idx].plot(
+                                            range(len(vector_x)), ".-", color=c
+                                        )
+                                        _line.set_xdata(vector_x)
+                                        _line.set_ydata(vector_y)
+                                        legends.append("cw-%s" % _temp_key)
 
                             c = next(colors_iter)
                             (_line,) = axs[_idx].plot(
@@ -578,6 +586,13 @@ def _extract_data_from_graph(graph, data_graph, index):
     pass
 
 
+def _plot_exit():
+    global data_graph, temp_cw, temp_idx
+    data_graph = {}
+    temp_cw = {}
+    temp_idx = {}
+
+
 ## Control component
 def _update_file_stream_nums(graph):
     """
@@ -655,13 +670,15 @@ def plot_thread():
         is_draw.clear()
     # close the graph
     plt.title(experiment_name)
-    fig.savefig("temp/%s.png" % experiment_name)
+    fig.savefig("temp/%s-%s.png" % (experiment_name,time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())))
     fig.clear()
     plt.ioff()
     plt.close(fig)
 
 
 def transmission_thread(graph):
+    global is_stop
+    is_stop.clear()
     conn = _transmission_block(graph)
     print(_sum_file_thru(_loop_apply(conn)))
     conn = _calc_rtt(graph)
@@ -684,18 +701,19 @@ def DQN_training_thread():
             counter += 1
             if counter > counter_max:
                 print("loss\t", loss_collect / counter_max)
+                loss_collect = 0
                 counter = 0
-            time.sleep(0.01)
+            time.sleep(0.1)
         else:
             time.sleep(0.5)
             # print("training_thread",wlanController.memory_counter)
 
         if wlanController.training_counter % 300 == 0:
-            wlanController.store_params("%s/temp/%s.pkl" % (abs_path, experiment_name))
+            wlanController.store_params("%s/training/model/%s.pkl" % (abs_path, experiment_name))
         is_network_use.set()
 
     wlanController.store_memory(
-        "%s/temp/%s-%d-%d"
+        "%s/training/saved_data/%s-%d-%d"
         % (
             abs_path,
             experiment_name,
@@ -720,17 +738,21 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
     his_fraction = heuristic_fraction
     is_network_use.set()
     while control_times < time_limit:
-        ## Determine break -- Generally speaking, it is not a good choice to use thread unsafe parameter as a condition
-        if is_stop.is_set():
-            break
         ## collect data
+        print("send statistics")
         for sock in socks:
             _buffer, _retry_idx = _loop_tx(sock, "statistics")
+            if _buffer is None:
+                break
             link_return = json.loads(str(_buffer.decode()))
 
             print("statistics return", _retry_idx, link_return)
             system_return.update({sock.link_name: link_return["body"]})
+            time.sleep(0.1)
 
+        ## Determine break -- Generally speaking, it is not a good choice to use thread unsafe parameter as a condition
+        if is_stop.is_set():
+            break
         ## update graph: activate and deactivate function
         graph.update_graph(system_return)
         ## DQN update and control
@@ -758,9 +780,11 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
                 heuristic_fraction = his_fraction
 
         except Exception as e:
-            print(e)
+            traceback.print_exc()
+            # print(e)
         ##
         if CONTROL_ON:
+            print("send throttle")
             print("heuristic_fraction", heuristic_fraction)
             if port_throttle := _throttle_calc(graph):
                 # print(port_throttle)
@@ -770,29 +794,35 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
                 is_control.set()
                 for sock in socks:
                     if sock.link_name in throttle.keys():
-                        _buffer, _retry_idx = _loop_tx(
-                            sock, "throttle", throttle[sock.link_name]
-                        )
+                        sock.ipc_transmit("throttle", throttle[sock.link_name])
                     else:
-                        _buffer, _retry_idx = _loop_tx(sock, "throttle", {})
+                        sock.ipc_transmit("throttle", {})
             else:
                 for sock in socks:
-                    _buffer, _retry_idx = _loop_tx(sock, "throttle", {})
+                    sock.ipc_transmit("throttle", {})
                 print("=" * 50)
                 print("Control Stop")
                 print("=" * 50)
             ## Get edca parameter
             edca_params = _edca_default_params(graph, controls)
-            #  store cw value for plot
+            ## store cw value for plot
             for _device_name in controls:
                 if _device_name != "fraction":
+                    ## init temp_cw, temp_idx
                     if _device_name not in temp_cw:
-                        temp_cw.update({_device_name: []})
-                        temp_idx.update({_device_name: []})
-                    temp_cw[_device_name].append(controls[_device_name] / 50)
-                    temp_idx[_device_name].append(control_times)
+                        temp_cw.update({_device_name: {}})
+                        temp_idx.update({_device_name: {}})
+                        for _action in controls[_device_name]:
+                            if _action not in temp_cw[_device_name]:
+                                temp_cw[_device_name].update({_action: []})
+                                temp_idx[_device_name].update({_action: []})
+                    
+                            temp_cw[_device_name][_action].append(controls[_device_name][_action] / 50)
+                            temp_idx[_device_name][_action].append(control_times)
+
             ## Set edca parameter
             _set_edca_parameter(conn, edca_params)
+
         ## plot data
         if dynamic_plotting:
             _extract_data_from_graph(graph, data_graph, control_times)
@@ -804,9 +834,10 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
     print("main thread stopping")
     time.sleep(0.5)
     is_draw.set()
+    ## close socket
+    [sock.close() for sock in socks]
+    is_control_stop.set()
     print("main thread stopped")
-    cost_f.close()
-
 
 ## Threading Entry
 def start_testing_threading(graph, ctl_prot):
@@ -819,7 +850,7 @@ def start_testing_threading(graph, ctl_prot):
         for link_name, streams in links.items():
             # start threads to send data
             prot, sender, receiver = link_name.split("_")
-            ip_addr = graph.info_graph[sender][ctl_prot + "_ip_addr"]
+            ip_addr = graph.info_graph[sender][prot + "_ip_addr"]               ## since no p2p/lo is considered
             sock = ipc_socket(
                 ip_addr,
                 graph.info_graph[device_name][link_name]["ipc_port"],
@@ -836,14 +867,16 @@ def start_testing_threading(graph, ctl_prot):
     training_t.start()
     time.sleep(0.5)
     control_t.start()
+    
 
 
 ## Iterative training over all the stream
 def iter_all_training_scenario(ind):
     from itertools import combinations
+    global throttle
 
     _, _lists = tc.cw_training_case()
-    for _ind in range(ind, len(_lists) + 1):
+    for _ind in range(ind, len(_lists)+1):
         for _file_link in _lists:
             for comb in combinations(_lists, _ind):
                 _graph, _ = tc.cw_training_case()
@@ -869,30 +902,45 @@ def iter_all_training_scenario(ind):
                         name="Proj",
                     )
                     port_id += 1
+                _graph.show()
                 try:
+                    print("============= Start one test period ==================")
                     is_stop.clear()
+                    is_control_stop.clear()
+                    throttle = {}
+                    _setup_ip(_graph)
+                    _graph.associate_ip("TV", "wlx", "192.168.3.62")
+                    _add_ipc_port(_graph)
+                    _set_manifest(_graph)
                     start_testing_threading(_graph, "wlp")
+                    plot_thread()
                     is_stop.wait()                                      # wait until all thread stop
+                    is_control_stop.wait()
+                    print("============= Stop one test period =============")
                 except Exception as e:
-                    print("===== {ind}-th transmission Error =====", e)
+                    print("===== %d-th transmission Error ====="%_ind, e)
                     break
+        
+    cost_f.close()
 
 
 def main(args):
     global experiment_name, wlanController
     experiment_name = args.experiment_name
-    graph = tc.cw_training_case()
-
+    graph,_ = tc.cw_training_case()
+    # graph = tc.cw_test_case(DURATION)
+ 
     # wlan - termux wifi ip  ; p2p - Wifi Direct ip
     # wlp - Intel IC wifi ip ; wlx - Realtek IC (rtl8812au) wifi ip
-    _ip_extract("wlan\\|p2p\\|wlp\\|wlx", graph)
-    _setup_ip(graph)
-    _add_ipc_port(graph)
-    graph.show()
+    _ip_extract("wlan\\|p2p\\|wlx\\|wlp", graph)
+    # _setup_ip(graph)
+    # graph.associate_ip("TV", "wlx", "192.168.3.61")
+    # _add_ipc_port(graph)
+    # exit()
     wlanController = wlanDQNController(
         [i / 10 for i in range(1, 10, 1)],
-        [1, 3, 7, 15, 31, 63, 127, 255],  # CW value
-        [2, 3, 7, 15, 20, 25, 30, 35],  # AIFSN
+        [1, 3 , 7 , 15, 31, 63],  # CW value
+        [1, 5, 10, 15, 20],  # AIFSN
         10000,
         graph,
         batch_size=32,
@@ -900,8 +948,11 @@ def main(args):
     if args.load:
         wlanController.load_params("%s/temp/%s.pkl" % (abs_path, experiment_name))
     # exit()
-    _set_manifest(graph)
+    # _set_manifest(graph)
+    # graph.show()
+    # exit()
     iter_all_training_scenario(1)
+    # start_testing_threading(graph, "wlp")
     # TODO: fix dynamic plot issue
     if dynamic_plotting:
         plot_thread()

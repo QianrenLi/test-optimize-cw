@@ -158,6 +158,9 @@ class DQNController:
 
     def store_transition(self, state, action_idx, cost, state_):
         transition = np.hstack((state, action_idx, cost, state_))
+        if None in transition:
+            print(transition)
+            return
         index = self.memory_counter % self.memory_size
         self.memory[index, :] = transition
         if index == 0 and self.is_memory_save:
@@ -291,7 +294,7 @@ class DQNController:
             # zero gradient
             loss.backward()
             # set allowable maximum gradient
-            torch.nn.utils.clip_grad_value_(self.action_net.parameters(), 100)
+            torch.nn.utils.clip_grad_value_(self.action_net.parameters(), 1000)
             # update network
             self.action_opt.step()
 

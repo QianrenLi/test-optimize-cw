@@ -204,32 +204,32 @@ def cw_test_case(DURATION) -> Graph:
     graph = Graph()
     graph.ADD_DEVICE('phone')
     graph.ADD_DEVICE('PC')    
-    link1 = graph.ADD_LINK('phone', '', 'wlan', 200)
-    link2 = graph.ADD_LINK('PC', '', 'wlan', 500)
+    link1 = graph.ADD_LINK('phone', '', 'wlx', 800)
+    link2 = graph.ADD_LINK('PC', '', 'wlp', 600)
 
-    graph.ADD_STREAM(link2, port_number=6202, file_name="proj_6.25MB.npy", duration=[
-                     0, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=96, target_rtt=18, name= 'Proj')
+    # graph.ADD_STREAM(link1, port_number=6202, file_name="proj_6.25MB.npy", duration=[
+    #                  0, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=18, name= 'Proj')
 
-    graph.ADD_STREAM(link1, port_number=6203, file_name="proj_6.25MB.npy", duration=[
-                     150, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=96, target_rtt=18, name= 'Proj')
+    # graph.ADD_STREAM(link2, port_number=6203, file_name="proj_6.25MB.npy", duration=[
+    #                  0, DURATION], thru=name_to_thru("proj_6.25MB.npy"), tos=128, target_rtt=18, name= 'Proj')
 
-    graph.ADD_STREAM(link1, port_number=6201, file_name="file_75MB.npy", duration=[
-                     0, DURATION], thru=0, tos=96, name= 'File')   
+    graph.ADD_STREAM(link1, port_number=6202, file_name="file_75MB.npy", duration=[
+                     0, DURATION], thru=0, tos=32, name= 'File')   
+    graph.ADD_STREAM(link2, port_number=6201, file_name="file_75MB.npy", duration=[
+                     0, DURATION], thru=0, tos=32, name= 'File')   
     return graph
 
 def cw_training_case():
     graph = Graph()
     graph.ADD_DEVICE('phone')
     graph.ADD_DEVICE('PC')
-    graph.ADD_DEVICE('pad')
     graph.ADD_DEVICE('TV')
 
-    link1 = graph.ADD_LINK('phone', '', 'wlan', 200)
-    link2 = graph.ADD_LINK('PC', '', 'wlx', 200)
-    link3 = graph.ADD_LINK('pad', '', 'wlan', 200)
-    link4 = graph.ADD_LINK('TV', '', 'wlx', 200)    
-
-    lists = [link1, link2, link3, link4]
+    link1 = graph.ADD_LINK('phone', '', 'wlp', 400)
+    link2 = graph.ADD_LINK('PC', '', 'wlx', 400)
+    link4 = graph.ADD_LINK('TV', '', 'wlx', 400)    
+    # lists = [link1, link2]
+    lists = [link1, link2, link4]
     return graph, lists
             
 
