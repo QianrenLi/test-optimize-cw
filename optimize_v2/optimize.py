@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import sys
 import ctypes
 from transmission_graph import Graph
 from tap import Connector
@@ -52,7 +53,7 @@ heuristic_fraction = 0.3
 
 
 ## ==================Config parameters================================== ##
-_duration = 150
+_duration = 30
 START_POINT = 0
 control_period = 1
 DURATION = int(_duration + START_POINT * control_period)
@@ -60,7 +61,7 @@ rx_DURATION = int(DURATION)
 CONTROL_ON = True
 control_times = (DURATION ) / control_period
 experiment_name = "test"
-dynamic_plotting = False
+dynamic_plotting = True
 ## ==================Config parameter================================== ##
 
 
@@ -465,7 +466,7 @@ def _update_fig(fig, axs, data_graph):
                                         )
                                         _line.set_xdata(vector_x)
                                         _line.set_ydata(vector_y)
-                                        legends.append("cw-%s" % _temp_key)
+                                        legends.append("%s-%s" % (_temp_key, _temp_action))
 
                             c = next(colors_iter)
                             (_line,) = axs[_idx].plot(
@@ -680,11 +681,12 @@ def transmission_thread(graph):
     global is_stop
     is_stop.clear()
     conn = _transmission_block(graph)
-    print(_sum_file_thru(_loop_apply(conn)))
+    results = _sum_file_thru(_loop_apply(conn))
+    print(results)
     conn = _calc_rtt(graph)
     print(_rtt_port_associate(graph, _loop_apply(conn)))
     is_stop.set()
-
+    return results
 
 def DQN_training_thread():
     global wlanController
@@ -708,10 +710,10 @@ def DQN_training_thread():
             time.sleep(0.5)
             # print("training_thread",wlanController.memory_counter)
 
-        if wlanController.training_counter % 300 == 0:
-            wlanController.store_params("%s/training/model/%s.pkl" % (abs_path, experiment_name))
+        # if wlanController.training_counter % 300 == 0:
+        #     wlanController.store_params("%s/training/model/%s.pkl" % (abs_path, experiment_name))
         is_network_use.set()
-
+    wlanController.store_params("%s/training/model/%s.pkl" % (abs_path, experiment_name))
     wlanController.store_memory(
         "%s/training/saved_data/%s-%d-%d"
         % (
@@ -747,6 +749,7 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
             link_return = json.loads(str(_buffer.decode()))
 
             print("statistics return", _retry_idx, link_return)
+            sys.stdout.flush()
             system_return.update({sock.link_name: link_return["body"]})
             time.sleep(0.1)
 
@@ -812,13 +815,13 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
                     if _device_name not in temp_cw:
                         temp_cw.update({_device_name: {}})
                         temp_idx.update({_device_name: {}})
-                        for _action in controls[_device_name]:
-                            if _action not in temp_cw[_device_name]:
-                                temp_cw[_device_name].update({_action: []})
-                                temp_idx[_device_name].update({_action: []})
-                    
-                            temp_cw[_device_name][_action].append(controls[_device_name][_action] / 50)
-                            temp_idx[_device_name][_action].append(control_times)
+                    for _action in controls[_device_name]:
+                        if _action not in temp_cw[_device_name]:
+                            temp_cw[_device_name].update({_action: []})
+                            temp_idx[_device_name].update({_action: []})
+                        maximum_action_value = 70 if _action == "cw" else 25
+                        temp_cw[_device_name][_action].append(controls[_device_name][_action] / maximum_action_value)
+                        temp_idx[_device_name][_action].append(control_times)
 
             ## Set edca parameter
             _set_edca_parameter(conn, edca_params)
@@ -836,6 +839,7 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
     is_draw.set()
     ## close socket
     [sock.close() for sock in socks]
+    cost_f.write("\n")
     is_control_stop.set()
     print("main thread stopped")
 
@@ -867,8 +871,28 @@ def start_testing_threading(graph, ctl_prot):
     training_t.start()
     time.sleep(0.5)
     control_t.start()
+    # plot_thread()
     
-
+## Throughput setup
+def init_throughput_measure():
+    _graph, _lists = tc.cw_training_case()
+    print("Start Measure")
+    for _file_link in _lists:
+        print(_file_link)
+        _graph.ADD_STREAM(
+            _file_link,
+            port_number=6200,
+            file_name="file_75MB.npy",
+            duration=[0, DURATION],
+            thru=0,
+            tos=96,
+            name="File",
+        )
+    _setup_ip(_graph)
+    _add_ipc_port(_graph)
+    _set_manifest(_graph)
+    results = transmission_thread(_graph)
+    print("End of measure")
 
 ## Iterative training over all the stream
 def iter_all_training_scenario(ind):
@@ -899,7 +923,7 @@ def iter_all_training_scenario(ind):
                         thru=6.25,
                         tos=32,
                         target_rtt=18,
-                        name="Proj",
+                        name="Proj-%s" % _link,
                     )
                     port_id += 1
                 _graph.show()
@@ -909,13 +933,13 @@ def iter_all_training_scenario(ind):
                     is_control_stop.clear()
                     throttle = {}
                     _setup_ip(_graph)
-                    _graph.associate_ip("TV", "wlx", "192.168.3.62")
                     _add_ipc_port(_graph)
                     _set_manifest(_graph)
                     start_testing_threading(_graph, "wlp")
                     plot_thread()
                     is_stop.wait()                                      # wait until all thread stop
                     is_control_stop.wait()
+                    _plot_exit()
                     print("============= Stop one test period =============")
                 except Exception as e:
                     print("===== %d-th transmission Error ====="%_ind, e)
@@ -924,29 +948,79 @@ def iter_all_training_scenario(ind):
     cost_f.close()
 
 
+## local training test case
+def local_training():
+    graph,_ = tc.cw_training_case()
+    wlanController = wlanDQNController(
+        [i / 10 for i in range(1, 10, 1)],
+        [1, 3 , 7 , 15, 31, 63],  # CW value
+        [1, 5 , 10, 15, 20],  # AIFSN
+        10000,
+        graph,
+        batch_size= 128,
+        gamma = 0.9,
+        is_CDQN = True,
+        is_k_cost= 5
+    )
+    memory_path_first_3 = "6-20-2-8-63-2023-06-20-17:57:35.npy" # loss -> 0.3
+    memory_path_first_4 = "6-20-2-8-63-2023-06-20-18:01:05.npy" # loss -> 1.1
+    memory_path_first_5 = "6-20-2-8-63-2023-06-20-18:04:37.npy" # loss -> 1.7
+    memory_path_all = "6-20-2-8-63-2023-06-20-18:08:09.npy"     # loss -> 2
+    # wlanController.load_memory(abs_path + "/training/saved_data/%s" % memory_path_first_5)
+    wlanController.load_memory_test(abs_path + "/training/saved_data/%s" % memory_path_first_3, abs_path + "/training/saved_data/%s" % memory_path_all) # loss -> 7
+    # wlanController.load_memory(abs_path + "/training/saved_data/test-8-53-2023-06-18-15:56:04.npy")
+    loss_saved = 0
+    episode = 1000
+    num_episode = 10
+    counter_max = 50
+    # while True:
+    for i_episode in range(num_episode):
+        counter = 0
+        for i in range(episode):
+            loss = wlanController.training_network()  
+            loss_saved += loss 
+            if counter % counter_max == 0:
+                print("loss\t", loss_saved/counter_max) 
+                sys.stdout.flush()
+                loss_saved = 0
+            counter += 1
+    wlanController.store_params("%s/training/model/%s.pkl" % (abs_path, "test2"))
+            
+        
+         
+
 def main(args):
     global experiment_name, wlanController
     experiment_name = args.experiment_name
+    # local_training()
+    # exit()
     graph,_ = tc.cw_training_case()
     # graph = tc.cw_test_case(DURATION)
  
     # wlan - termux wifi ip  ; p2p - Wifi Direct ip
     # wlp - Intel IC wifi ip ; wlx - Realtek IC (rtl8812au) wifi ip
     _ip_extract("wlan\\|p2p\\|wlx\\|wlp", graph)
+    init_throughput_measure()
+    exit()
     # _setup_ip(graph)
     # graph.associate_ip("TV", "wlx", "192.168.3.61")
     # _add_ipc_port(graph)
     # exit()
     wlanController = wlanDQNController(
-        [i / 10 for i in range(1, 10, 1)],
+        [i / 20 for i in range(1, 20, 1)],
         [1, 3 , 7 , 15, 31, 63],  # CW value
         [1, 5, 10, 15, 20],  # AIFSN
         10000,
         graph,
         batch_size=32,
+        is_CDQN = False,
+        is_k_cost= 5
     )
     if args.load:
-        wlanController.load_params("%s/temp/%s.pkl" % (abs_path, experiment_name))
+        wlanController.load_params("%s/training/model/%s.pkl" % (abs_path, experiment_name))
+        wlanController.load_memory(abs_path + "/training/saved_data/6-20-3-8-63-2023-06-20-20:58:13.npy")
+        wlanController.action_counter = 1000
+    
     # exit()
     # _set_manifest(graph)
     # graph.show()
@@ -954,8 +1028,8 @@ def main(args):
     iter_all_training_scenario(1)
     # start_testing_threading(graph, "wlp")
     # TODO: fix dynamic plot issue
-    if dynamic_plotting:
-        plot_thread()
+    # if dynamic_plotting:
+    #     plot_thread()
 
 
 if __name__ == "__main__":

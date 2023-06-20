@@ -11,8 +11,31 @@ def two_IC_setup():
     rets = []
     rets.append(route_setup(info, if_name_Intel, 111))
     rets.append(route_setup(info, if_name_Realtek, 112))
-    print("Setup Failed") if -1 in rets else print("Setup Successful")
+    if -1 in rets:
+        print("Setup Failed")
+        return None
+    else:
+        print("Setup Successful")
+        return [if_name_Intel, if_name_Realtek]
+
+def subset_IC_setup():
+    info = init_info()
+    subnet = "192.168"
+    rets = []
+    if_name = []
+    for key in info:
+        table_id = 111
+        if subnet in info[key]:
+            rets.append(route_setup(info, key, table_id))
+            if_name.append(key)
+            table_id += 1
     
+    if -1 in rets or len(if_name) == 0:
+        print("Setup Failed")
+        return None
+    else:
+        print("Setup Successful")
+        return if_name
 
 
 ## init ip information
@@ -45,18 +68,21 @@ def route_setup(info, if_type, table_id, netmask=24):
 def run_cmd(cmd):
     os.system(cmd)
 
-def sys_conf_init():
+def sys_conf_init(if_names):
+    if if_names is None:
+        print("Config do not write")
+        return -1
     path = "/etc/sysctl.conf"
     info = init_info()
     if not if_conf_exist(path):
-        write_sys_conf(info, path)
+        write_sys_conf(info, path, if_names)
     else:
         print("Config Exists")
 
-def sys_conf_exit():
+def sys_conf_exit(line_num):
     path = "/etc/sysctl.conf"
     if if_conf_exist(path):
-        remove_last_k_lines(path, 10)
+        remove_last_k_lines(path, line_num)
     else:
         print("Config not exists")
 
@@ -68,14 +94,9 @@ def if_conf_exist(path):
     return False
 
 ## Write to /etc/sysctl.conf
-def write_sys_conf(info, path):
-    if_name_Intel = None
-    if_name_Realtek = None
-    for if_name in info.keys():
-        if_name_Intel = if_name if "wlp" in if_name else if_name_Intel
-        if_name_Realtek = if_name if "wlx" in if_name else if_name_Realtek
-    print([if_name_Intel, if_name_Realtek])
-    if None not in [if_name_Intel, if_name_Realtek]:
+def write_sys_conf(info, path, if_names):
+    print(if_names)
+    if None not in if_names:
         print("start write")
         with open(path, "a") as f:
             f.write("\nnet.ipv4.conf.all.all_announce = 2\n")               #in remove last k lines function, it will additionally remove "\n"
@@ -84,12 +105,10 @@ def write_sys_conf(info, path):
             f.write("net.ipv4.conf.default.arp_announce = 2\n")
             f.write("net.ipv4.conf.default.arp_ignore = 1\n")
             f.write("net.ipv4.conf.default.rp_filter = 1\n")
-            ## Write Intel card
-            f.write("net.ipv4.conf.%s.arp_announce = 2\n" % if_name_Intel)
-            f.write("net.ipv4.conf.%s.arp_ignore = 1\n" % if_name_Intel)
-            ## Write Realtek card
-            f.write("net.ipv4.conf.%s.arp_announce = 2\n" % if_name_Realtek)
-            f.write("net.ipv4.conf.%s.arp_ignore = 1\n" % if_name_Realtek)
+            for if_name in if_names:
+                f.write("net.ipv4.conf.%s.arp_announce = 2\n" % if_name)
+                f.write("net.ipv4.conf.%s.arp_ignore = 1\n" % if_name)
+        print("Lines written:\t", 6 + 2*len(if_names))
     else:
         print("write failed")
 
@@ -113,10 +132,11 @@ def remove_last_k_lines(path, k):
 
 def main(args):
     if args.start:
-        two_IC_setup()
-        sys_conf_init()
+        # if_names = two_IC_setup()
+        if_names = subset_IC_setup()
+        sys_conf_init(if_names)
     if args.exit:
-        sys_conf_exit()
+        sys_conf_exit(args.lines)
 
 
 ## Main function
@@ -127,6 +147,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--exit", action = "store_true", help  = "Exit config"
+    )
+    parser.add_argument(
+        "-l", "--lines", type= int, help="lines required to be removed"
     )
     args = parser.parse_args()
     main(args)

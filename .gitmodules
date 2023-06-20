@@ -3,4 +3,4 @@
 	url = https://github.com/QianrenLi/stream-replay.git
 [submodule "optimize_v2/wlsops-hack"]
 	path = optimize_v2/wlsops-hack
-	url = https://github.com/QianrenLi/wlsops-hack
+	url = https://github.com/QianrenLi/wlsops-hack.git

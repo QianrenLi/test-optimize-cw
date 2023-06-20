@@ -26,7 +26,9 @@ class wlanDQNController(DQNController):
         batch_size=16,
         gamma=0.9,
         max_agent_num = 4,
-        max_action_num = 4
+        max_action_num = 4,
+        is_CDQN = False,
+        is_k_cost = 0
     ) -> None:
         self.graph = graph
         self.log_path = "./training/logs/log-loss-%s.txt" % time.strftime(
@@ -64,6 +66,9 @@ class wlanDQNController(DQNController):
             memory_size,
             batch_size,
             gamma,
+            is_CDQN = is_CDQN,
+            is_k_cost = is_k_cost,
+            is_remove_state_maximum = self._rtt_threshold
         )
 
     def update_graph(self, graph):
@@ -228,7 +233,7 @@ if __name__ == "__main__":
             file_name="voice_0.05MB.npy",
             duration=[0, 50],
             thru=0.05,
-            tos=32,
+            tos=128,
             target_rtt=18,
             name="Proj",
         )
@@ -240,12 +245,12 @@ if __name__ == "__main__":
         10000,
         graph,
         batch_size=32,
-        
     )
     # print(wlanController.get_state())
     state = wlanController.get_state()
     action, _ = wlanController.action_to_control(wlanController.get_state())
-    # print(action)
+    print(action)
+    print(_)
     fraction = action["fraction"]
     cost = wlanController.get_cost(fraction)
     state_ = wlanController.get_state()

@@ -179,6 +179,7 @@ def _execute(name, task_pool, tid, config, params, timeout) -> None:
         for i,p in enumerate(processes):
             _stdout = p.stdout; assert(not _stdout==None)
             outputs.update({ f'$output_{i}' : repr(_stdout.read().decode().strip())  })
+        print(outputs)
         ##
         results = dict()
         output_items = config['outputs'].items() if 'outputs' in config else dict()

@@ -3,6 +3,10 @@ from torch import nn
 import torch.nn.functional as F
 import numpy as np
 
+# from .netUtil import ResNet
+from .ResNet import resnet18
+from .ResNet import resnet34
+
 # define network
 
 
@@ -15,15 +19,16 @@ class Net(nn.Module):
 
         # self.normal_factor = 1 / np.sqrt(hidden_states)
 
-        self.fc = self._make_layer(hidden_states, 2)
-        self.fc1 = nn.Linear(hidden_states, actions)
+        self.fc = self._make_layer(hidden_states, 5)
+        self.fc2 = nn.Linear(hidden_states, hidden_states//2)
+        self.fc1 = nn.Linear(hidden_states//2, actions)
 
     def _make_layer(self, hidden_states, num_layers):
         layers = []
         for i in range(num_layers):
             layers.append(nn.Linear(hidden_states, hidden_states))
             layers.append(nn.BatchNorm1d(1))
-            layers.append(nn.ReLU(inplace=False))
+            layers.append(nn.ReLU(inplace=True))
             # layers.append(nn.Softmax(dim=-1))
         return nn.Sequential(*layers)
 
@@ -39,7 +44,7 @@ class Net(nn.Module):
 
         # temp_hidden = torch.bmm(self.attention_weights, temp_v)
 
-        return self.fc1(self.fc(temp_q))
+        return self.fc1(self.fc2(self.fc(temp_q)))
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -54,6 +59,9 @@ class DQNController:
         batch_size=4,
         gamma=0.9,
         hidden_state=1024,
+        is_CDQN=False,
+        is_k_cost=0,
+        is_remove_state_maximum=0,
     ) -> None:
         self.state_size = state_size
         self.action_space = action_space
@@ -67,17 +75,28 @@ class DQNController:
         self.action_counter = 0
         self.train_counter = 0
         self.memory_counter = 0
-        self.train_counter_max = 1000
+        self.train_counter_max = 200
 
         self.is_memory_save = False
 
         self.memory = np.zeros((memory_size, state_size * 2 + self.action_num + 1))
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
         self.eval_net = Net(state_size, hidden_state, self.action_size).to(device)
         self.action_net = Net(state_size, hidden_state, self.action_size).to(device)
-        self.action_opt = torch.optim.Adam(self.action_net.parameters(), lr=0.001)
+        # self.action_net =  ResNet(5, state_size, hidden_state, self.action_size,5).to(device)
+        # self.eval_net = ResNet(5, state_size, hidden_state, self.action_size,5).to(device)
+        # self.action_net = resnet18(self.action_size).to(device)
+        # self.eval_net = resnet18(self.action_size).to(device)
+        self.action_opt = torch.optim.Adam(self.action_net.parameters(), lr=0.0001)
         self.criterion = nn.MSELoss().to(device)
+        # self.criterion = nn.HuberLoss().to(device)
+
+        self.is_CDQN = is_CDQN
+        self.is_k_cost = is_k_cost
+        self.is_remove_state_maximum = 0
+        self.is_normalized_action_value = True
+        self.normalize_epsilon = 0.001
 
         self.parameter_replace()
 
@@ -88,15 +107,25 @@ class DQNController:
     def store_params(self, path):
         torch.save(self.action_net.state_dict(), path)
 
-    def load_memory(self, path:str):
+    def load_memory(self, path: str):
         _memory = np.load(path)
+        self.memory_counter = len(_memory)
+        self.memory[0:self.memory_counter,:]= _memory
+        print("Loading successively")
+
+    def load_memory_test(self, path1: str,path2: str):
+        _memory = np.load(path1)
+        memory_counter = len(_memory)
+        _memory = np.load(path2)
+        _memory = _memory[memory_counter:, :]
         self.memory_counter = len(_memory)
         self.memory_size = self.memory_counter
         self.memory = _memory
+        print("Loading successively")
 
-    def store_memory(self,  path:str):
+    def store_memory(self, path: str):
         memory_limit = min(self.memory_size, self.memory_counter)
-        _memory = self.memory[: memory_limit]
+        _memory = self.memory[:memory_limit]
         np.save(path, _memory)
 
     def set_network(
@@ -116,12 +145,35 @@ class DQNController:
         self.criterion = criterion
 
     def extract_memory(self, batch_memory: np.array):
+        index = []
         state = batch_memory[:, : self.state_size]
-        action = batch_memory[:, self.state_size : self.state_size + self.action_num]
-        cost = batch_memory[
-            :, self.state_size + self.action_num : self.state_size + self.action_num + 1
+        if self.is_remove_state_maximum > 0:
+            for idx, _state in enumerate(state):
+                # print(_state)
+                if self.is_remove_state_maximum not in _state:
+                    # print("in",_state)
+                    index.append(idx)
+
+        else:
+            index = list(range(len(batch_memory)))
+
+        state = batch_memory[index, : self.state_size]
+        action = batch_memory[
+            index, self.state_size : self.state_size + self.action_num
         ]
-        state_ = batch_memory[:, self.state_size + self.action_num + 1 :]
+        cost = batch_memory[
+            index,
+            self.state_size + self.action_num : self.state_size + self.action_num + 1,
+        ]
+        state_ = batch_memory[index, self.state_size + self.action_num + 1 :]
+        if len(state) == 0:
+            return (
+                np.zeros((1, self.state_size)),
+                np.zeros((1, self.action_num)),
+                np.zeros((1, 1)),
+                np.zeros((1, self.state_size)),
+            )
+        # print(state)
         return state, action, cost, state_
 
     def _extract_action(self, tensor_action, action_idxs):
@@ -166,14 +218,13 @@ class DQNController:
         if index == 0 and self.is_memory_save:
             self.store_memory()
         self.memory_counter += 1
-        
 
     def get_action(self, state):
         """
         function used for output action to environment when given a state
         """
-        epsilon = min(self.action_counter / 100, 0.9)
-        if np.random.rand() <= epsilon:
+        epsilon = np.exp( - (self.action_counter) / 100)
+        if np.random.rand() <= 1 - epsilon:
             state = torch.tensor(
                 state.reshape((1, 1, self.state_size)), dtype=torch.float
             ).to(device)
@@ -236,20 +287,88 @@ class DQNController:
         action_idx = torch.tensor(
             action_idx.reshape(batch_size, 1, action_num), dtype=torch.int64
         ).to(device)
+        if self.is_normalized_action_value:
+            return self.contraction_op(
+                torch.tensor(
+                    np.repeat(cost, action_num, axis=1).reshape(
+                        batch_size, 1, action_num
+                    ),
+                    dtype=torch.float,
+                ).to(device)
+                + self.inv_contraction_op(
+                    self.gamma * action_tensor.gather(2, action_idx)
+                )
+            )
         return torch.tensor(
             np.repeat(cost, action_num, axis=1).reshape(batch_size, 1, action_num),
             dtype=torch.float,
         ).to(device) + self.gamma * action_tensor.gather(2, action_idx)
+
+    def inv_contraction_op(self, input_ts):
+        return torch.sgn(input_ts) * (
+            torch.square(
+                torch.divide(
+                    torch.sqrt(
+                        torch.multiply(
+                            torch.abs(input_ts) + 1 + self.normalize_epsilon,
+                            4 * self.normalize_epsilon,
+                        )
+                        + 1
+                    )
+                    - 1,
+                    2 * self.normalize_epsilon,
+                )
+            )
+            - 1
+        )
+
+    def contraction_op(self, input_ts):
+        return (
+            torch.sgn(input_ts) * (torch.sqrt(torch.abs(input_ts) + 1) - 1)
+            + self.normalize_epsilon * input_ts
+        )
 
     def parameter_replace(self):
         # print("pre\t",self.action_net.state_dict())
         self.eval_net.load_state_dict(self.action_net.state_dict())
         # print("a\t",self.action_net.state_dict())
 
+    @staticmethod
+    def tensor_reshape(input_Ts):  ## formatting tensor into [batch, 1, action_size]
+        ts_shape = input_Ts.shape
+        if len(ts_shape) == 2:
+            return torch.reshape(input_Ts, (ts_shape[0], 1, ts_shape[1]))
+        else:
+            return input_Ts
+
+    def TD_k_cost(self, k, inds, cost_shape):
+        k_costs = []
+        for ind in inds:
+            min_ind = ind - k if ind > k else 0
+            index = [ind - k, ind]
+            batch_memory = self.memory[index, :]
+            state, action, costs, state_ = self.extract_memory(batch_memory)
+            if len(state) == 0:
+                k_costs.append(
+                    batch_memory[
+                        -1,
+                        self.state_size
+                        + self.action_num : self.state_size
+                        + self.action_num
+                        + 1,
+                    ]
+                )
+            else:
+                k_cost = 0
+                for cost in costs:
+                    k_cost = cost + self.gamma * k
+                k_costs.append(k_cost)
+        return np.array(k_costs).reshape(cost_shape)
+
     def training_network(self):
         if None in [self.action_opt, self.criterion, self.eval_net]:
             print("Check optimizer, criterion and network setup")
-            return
+            return 0
         # extract memory
         index = np.random.choice(
             min(self.memory_size, self.memory_counter), self.batch_size
@@ -265,6 +384,7 @@ class DQNController:
 
             _action_idx_np = np.take(action_idx, batch_idx, axis=0)
             _action_idx = self._remove_inactive_action(_action_idx_np)
+            _target_value_num = _action_idx.shape[1]
             _action_idx = self.tensor_formatting(
                 _action_idx,
                 (-1, 1, _action_idx.shape[1]),
@@ -276,31 +396,50 @@ class DQNController:
                 torch.float,
             )
             _cost = np.take(cost, batch_idx, axis=0)
+            if self.is_k_cost > 0:
+                _cost = self.TD_k_cost(
+                    3, np.take(index, batch_idx, axis=0), _cost.shape
+                )
+            # if _state_.shape[0] == 1:  ## skip batch size = 1
+            #     continue
             q_action = self.action_net(_state)
-            q_action = q_action.gather(2, _action_idx)
+
+            q_action = self.tensor_reshape(q_action).gather(2, _action_idx)
 
             with torch.no_grad():
-                q_action_next = self.eval_net(_state_).detach()
+                q_action_next = self.tensor_reshape(self.eval_net(_state_)).detach()
                 _, _action_idx = self._extract_action(q_action_next, _action_idx_np)
                 q_target = self._action_tensor_formatting(
                     _cost, q_action_next, self._remove_inactive_action(_action_idx)
                 )
+            if self.is_CDQN:
+                q_action_next_ = self.tensor_reshape(self.action_net(_state_)).detach()
+                _, _action_idx = self._extract_action(q_action_next_, _action_idx_np)
+                q_target_ = self._action_tensor_formatting(
+                    _cost, q_action_next_, self._remove_inactive_action(_action_idx)
+                )
+
             self.train_counter += 1
 
             self.action_opt.zero_grad()
             # back propagate
             loss = self.criterion(q_action, q_target)
-
+            if self.is_CDQN:
+                loss_2 = self.criterion(q_action, q_target_)
+                loss = torch.max(loss, loss_2)
+            # loss = loss / _target_value_num
             # zero gradient
             loss.backward()
             # set allowable maximum gradient
-            torch.nn.utils.clip_grad_value_(self.action_net.parameters(), 1000)
+            torch.nn.utils.clip_grad_value_(self.action_net.parameters(), 100)
             # update network
             self.action_opt.step()
+            # self.action_scheduler.step()
 
         if self.train_counter >= self.train_counter_max:
             self.train_counter = 0
             self.parameter_replace()
+        
 
         return loss.item()
 

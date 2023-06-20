@@ -223,13 +223,13 @@ def cw_training_case():
     graph = Graph()
     graph.ADD_DEVICE('phone')
     graph.ADD_DEVICE('PC')
-    graph.ADD_DEVICE('TV')
+    # graph.ADD_DEVICE('TV')
 
-    link1 = graph.ADD_LINK('phone', '', 'wlp', 400)
-    link2 = graph.ADD_LINK('PC', '', 'wlx', 400)
-    link4 = graph.ADD_LINK('TV', '', 'wlx', 400)    
-    # lists = [link1, link2]
-    lists = [link1, link2, link4]
+    link1 = graph.ADD_LINK('phone', '', 'wlp', 536)
+    link2 = graph.ADD_LINK('PC', '', 'wlx', 432)
+    # link4 = graph.ADD_LINK('TV', '', 'wlx', 400)    
+    lists = [link1,link2]
+    # lists = [link1, link2, link4]
     return graph, lists
             
 

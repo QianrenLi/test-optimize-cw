@@ -3,7 +3,6 @@ import numpy as np
 from torchsummary import summary
 import torch
 from torch import nn
-from netUtil import ResNet
 import os
 abs_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -51,7 +50,7 @@ counter = 0
 loss_saved = 0
 episode = 500
 num_episode = 10
-controller.load_params("%s/model/param.pkl" % abs_path)
+# controller.load_params("%s/model/param.pkl" % abs_path)
 for i_episode in range(num_episode):
     # controller.action_counter = 0
     state = np.array([0,0,0])
@@ -88,7 +87,6 @@ for i_episode in range(num_episode):
 import matplotlib.pyplot as plt
 
 plt.plot(value_list)
-
 plt.show()
 
 plt.plot(action_list)
