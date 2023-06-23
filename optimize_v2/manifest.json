@@ -190,7 +190,7 @@
                 "keyword": "wlan"
             },
             "commands": [
-                "cd tools; ifconfig > $file_name; python3 extract_ip_addr.py $file_name $keyword; rm $file_name"
+                "cd tools; python3 extract_ip_addr.py"
             ],
             "outputs": {
                 "ip_addr": {
@@ -206,10 +206,19 @@
                 "cw_min": -1,
                 "cw_max": -1,
                 "aifs": -1,
-                "realtek": ""
+                "ind": 1
             },
             "commands": [
-                "cd wlsops-hack; sudo python3 modify_edca.py --ac $ac --cw-min $cw_min --cw-max $cw_max --aifs $aifs $realtek"
+                "cd wlsops-hack; sudo python3 modify_edca.py --ac $ac --cw-min $cw_min --cw-max $cw_max --aifs $aifs --ind $ind"
+            ]
+        }
+        ,"reset_edca":{
+            "description": "Reset edca value",
+            "parameters":{
+                "ind": 1
+            },
+            "commands": [
+                "cd wlsops-hack; sudo python3 modify_edca.py --reset --ind $ind"
             ]
         }
     }

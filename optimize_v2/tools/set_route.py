@@ -49,6 +49,49 @@ def init_info():
                 info[key] = addr.address
     return info
 
+## config connection
+def conf_wpa_supplicant(if_name:str):
+    path = "/etc/wpa_supplicant/experiment-%s.conf" % if_name
+    if not os.path.exists(path):
+        os.mknod(path)
+        print("Create file successful")
+        ## write config to file
+        with open(path, "w") as f:
+            f.write("network={\n    ssid=\"HONOR-TEST-AP_5G\"\n    key_mgmt=NONE\n}\n")
+        print("Setup Config Successfully")
+    else:
+        print("File Exist")
+    stop_wpa_supplicant(if_name)
+    print("Stop Successfully")
+    start_wpa_supplicant(if_name)
+    print("Start Successfully")
+
+def start_wpa_supplicant(if_name:str):
+    path = "/etc/wpa_supplicant/experiment-%s.conf" % if_name
+    cmd = "sudo wpa_supplicant -B -i %s -c %s" % (if_name, path)
+    run_cmd(cmd)
+
+def stop_wpa_supplicant(if_name:str):
+    cmd = "sudo wpa_cli -i %s terminate" % if_name
+    run_cmd(cmd)
+
+## config name space
+def create_name_space(namespace:str, phy: str, if_name:str):
+    cmd = "sudo ip netns del %s ;" % namespace
+    cmd += "; sudo ip netns add %s ;" % namespace
+    cmd += add_phy_to_namespace(namespace, phy, if_name)
+    cmd += "; " + into_name_space(namespace)
+    run_cmd(cmd)
+
+def add_phy_to_namespace(namespace:str, phy:str, if_name:str) -> str:
+    cmd = "sudo iw phy %s set netns name %s" % (phy, namespace)
+    cmd += "; sudo ip netns exec %s ip link set %s up" % (namespace, if_name)
+    return cmd
+
+def into_name_space(namespace:str):
+    cmd = "sudo nsenter --net=/run/netns/%s" % namespace
+    return cmd
+
 ## Setup route table
 def route_setup(info, if_type, table_id, netmask=24):
     for if_name in info.keys():
@@ -132,27 +175,39 @@ def remove_last_k_lines(path, k):
 
 def main(args):
     if args.start:
-        # if_names = two_IC_setup()
-        if_names = subset_IC_setup()
-        sys_conf_init(if_names)
-    if args.exit:
-        sys_conf_exit(args.lines)
+        create_name_space(args.namespace, args.phy, args.ifname)
+    elif args.wpa:
+        conf_wpa_supplicant(args.ifname)
 
 
 ## Main function
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--start", action="store_true", help = "Start config and cmd setup"
+        "-s", "--start", action="store_true", help = "Start config and cmd setup"
     )
     parser.add_argument(
         "--exit", action = "store_true", help  = "Exit config"
     )
     parser.add_argument(
+        "-w, ""--wpa", action="store_true", help = "Start wpa connection" 
+    )
+    parser.add_argument(
         "-l", "--lines", type= int, help="lines required to be removed"
     )
+    parser.add_argument(
+        "-n", "--namespace", type = str, help="name of namespace"
+    )
+    parser.add_argument(
+        "-p", "--phy", type= str, help= "name of the phy layer"
+    )
+    parser.add_argument(
+        "-i", "--ifname", type= str, help= "name of the interface" 
+    )
+
     args = parser.parse_args()
     main(args)
+    
     # test_cmd = "ls"
     # subprocess.run(test_cmd, shell=True)
     # remove_last_k_lines("test.txt", 3)

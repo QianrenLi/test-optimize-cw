@@ -219,19 +219,26 @@ def cw_test_case(DURATION) -> Graph:
                      0, DURATION], thru=0, tos=32, name= 'File')   
     return graph
 
-def cw_training_case():
+def cw_training_case(*args):
+    if len(args) == 1:
+        MCSs = args[0]
+    else:
+        MCSs = [866.7, 866.7]
     graph = Graph()
-    graph.ADD_DEVICE('phone')
-    graph.ADD_DEVICE('PC')
+    graph.ADD_DEVICE('t1')
+    graph.ADD_DEVICE('t2')
     # graph.ADD_DEVICE('TV')
 
-    link1 = graph.ADD_LINK('phone', '', 'wlp', 536)
-    link2 = graph.ADD_LINK('PC', '', 'wlx', 432)
-    # link4 = graph.ADD_LINK('TV', '', 'wlx', 400)    
+    link1 = graph.ADD_LINK('t1', '', 'wlx', MCSs[0])
+    link2 = graph.ADD_LINK('t2', '', 'wlx', MCSs[1]) 
+    
+    # # link4 = graph.ADD_LINK('TV', '', 'wlx', 400)    
+    # lists = [link1,link2]
     lists = [link1,link2]
     # lists = [link1, link2, link4]
     return graph, lists
             
+
 
 
 if __name__ == '__main__':

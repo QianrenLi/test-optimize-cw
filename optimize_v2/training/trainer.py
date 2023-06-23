@@ -19,7 +19,7 @@ class Net(nn.Module):
 
         # self.normal_factor = 1 / np.sqrt(hidden_states)
 
-        self.fc = self._make_layer(hidden_states, 5)
+        self.fc = self._make_layer(hidden_states, 10)
         self.fc2 = nn.Linear(hidden_states, hidden_states//2)
         self.fc1 = nn.Linear(hidden_states//2, actions)
 
@@ -94,7 +94,7 @@ class DQNController:
 
         self.is_CDQN = is_CDQN
         self.is_k_cost = is_k_cost
-        self.is_remove_state_maximum = 0
+        self.is_remove_state_maximum = is_remove_state_maximum
         self.is_normalized_action_value = True
         self.normalize_epsilon = 0.001
 

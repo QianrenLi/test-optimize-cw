@@ -45,6 +45,7 @@ class wlanDQNController(DQNController):
         self.agent_states_num = 2           # 4 states for each stream
 
         self.is_memory_save = True
+        self.is_action_threshold = True
 
         self._rtt_threshold = 0.04                      # In (s), constraint state
         self._cost_threshold = 100               # Clip the cost  
@@ -150,6 +151,8 @@ class wlanDQNController(DQNController):
 
     def action_to_control(self, state):
         action, action_idx = self.get_action(state)
+       
+        is_state_reach_maximum =  True  if self.is_remove_state_maximum in state else False
         # unzip action and action index to a vector
         action = action[0]
         action_idx = action_idx[0]
@@ -166,10 +169,16 @@ class wlanDQNController(DQNController):
                         _control = {}
                         if action_idx[idx] != -1:
                             for _idx, action_name in enumerate(["cw", "aifs"]):
-                                self.graph.info_graph[device_name][link_name][
-                                    stream_name
-                                ].update({action_name: action[idx + _idx]})
-                                _control.update({action_name: action[idx + _idx]})
+                                if self.is_action_threshold and is_state_reach_maximum:
+                                    self.graph.info_graph[device_name][link_name][
+                                        stream_name
+                                    ].update({action_name: 0.1})
+                                    _control.update({action_name: 0.1})
+                                else:
+                                    self.graph.info_graph[device_name][link_name][
+                                        stream_name
+                                    ].update({action_name: action[idx + _idx]})
+                                    _control.update({action_name: action[idx + _idx]})
                             control.update(
                                 {prot + "_" + tos + "_" + sender + "_" + receiver: _control}
                             )
@@ -177,7 +186,11 @@ class wlanDQNController(DQNController):
                         elif not self.is_sorted:
                             idx += self.agent_action_num
                         ## End Action Load Section
-        control.update({"fraction": action[0]}) if self.active_action[0] != -1 else None
+        if self.is_action_threshold and is_state_reach_maximum:
+            control.update({"fraction": 0.1}) if self.active_action[0] != -1 else None
+            action_idx = np.zeros(len(action_idx))
+        else:
+            control.update({"fraction": action[0]}) if self.active_action[0] != -1 else None
         return control, action_idx
 
     def get_cost(self, fraction):

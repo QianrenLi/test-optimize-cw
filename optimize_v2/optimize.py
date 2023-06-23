@@ -53,15 +53,18 @@ heuristic_fraction = 0.3
 
 
 ## ==================Config parameters================================== ##
-_duration = 30
+_duration = 300
 START_POINT = 0
 control_period = 1
 DURATION = int(_duration + START_POINT * control_period)
-rx_DURATION = int(DURATION)
 CONTROL_ON = True
 control_times = (DURATION ) / control_period
 experiment_name = "test"
 dynamic_plotting = True
+multiple_IC = True
+is_Intel = False
+is_local_test = False
+init_thottle = 30
 ## ==================Config parameter================================== ##
 
 
@@ -197,7 +200,7 @@ def _ip_extract(keyword: str, graph: Graph):
         else:
             # print(ipv4_addrs)
             # Generally multiple ipv4 with same name might be detect, but we only need the first one
-            for ipv4_addr in ipv4_addrs[::-1]:
+            for ipv4_addr in ipv4_addrs:
                 ip_table[c].update({ipv4_addr[0]: ipv4_addr[1]})
 
     # print(ip_table)
@@ -210,14 +213,43 @@ def _setup_ip(graph):
     """
     Set up ip stored in graph by the ip_table (requirement to setup the transmission)
     """
+    if not multiple_IC:
+        with open("./temp/ip_table.json", "r") as ip_file:
+            ip_table = json.load(ip_file)
+
+        for device_name in ip_table.keys():
+            for protocol, ip in ip_table[device_name].items():
+                graph.associate_ip(device_name, protocol, ip)
+    else:
+        _add_ind_according_to_interface(graph)
+    # graph.show()
+
+
+def _add_ind_according_to_interface(_graph:Graph):
     with open("./temp/ip_table.json", "r") as ip_file:
         ip_table = json.load(ip_file)
-
+    ind_order = {}
+    ip_val = {}
     for device_name in ip_table.keys():
+        if is_Intel:
+            ind = 0
+        else:
+            ind = 1
         for protocol, ip in ip_table[device_name].items():
-            graph.associate_ip(device_name, protocol, ip)
-
-
+            if is_Intel and "wlp" in protocol:
+                ind_order.update({protocol: ind})
+                ip_val.update({protocol : ip})
+                ind += 1
+            elif "wlx" in protocol:
+                ind_order.update({protocol: ind})
+                ip_val.update({protocol : ip})
+                ind += 1
+    print(ind_order)
+    for device_name in ip_table.keys():    
+        for link in _graph.graph[device_name].keys():
+            prot, sender, receiver = link.split("_")
+            _graph.info_graph[device_name][link].update({"ind": ind_order[prot]})
+            _graph.associate_ip(device_name, prot, ip_val[prot])
 ## ipc communication component
 def _add_ipc_port(graph):
     """
@@ -293,7 +325,7 @@ def _set_manifest(graph):
                 if "file" not in stream["file_name"]:
                     parameter.update({"calc_rtt": True})
                 else:
-                    parameter.update({"throttle": 30})
+                    parameter.update({"throttle": init_thottle})
                 parameter.update({"start": stream["duration"][0]})
                 parameter.update({"stop": stream["duration"][1]})
                 _init_parameters.append(parameter)
@@ -326,7 +358,7 @@ def _transmission_block(graph):
                     conn.batch(
                         receiver,
                         "outputs_throughput",
-                        {"port": port_num, "duration": rx_DURATION},
+                        {"port": port_num, "duration": DURATION},
                         timeout=DURATION + 5,
                     )
                 else:
@@ -335,7 +367,7 @@ def _transmission_block(graph):
                         "outputs_throughput_jitter",
                         {
                             "port": port_num,
-                            "duration": rx_DURATION,
+                            "duration": DURATION,
                             "calc_rtt": "--calc-rtt",
                             "tos": tos,
                         },
@@ -352,7 +384,7 @@ def _transmission_block(graph):
             if receiver:
                 ip_addr = graph.info_graph[receiver][prot + "_ip_addr"]
             else:
-                ip_addr = "192.168.3.37"
+                ip_addr = "192.168.3.37" if not is_local_test else "127.0.0.1"
             conn.batch(
                 sender,
                 "run-replay-client",
@@ -396,16 +428,25 @@ def _edca_default_params(graph: Graph, controls: dict):
 
     for link_name_tos in controls.keys():
         if "_" in link_name_tos:
-            prot, tos, tx_device_name, _ = link_name_tos.split("_")
-            is_realtek = "--realtek" if prot == "wlx" else ""
+            prot, tos, tx_device_name, rx_device_name = link_name_tos.split("_")
             if tx_device_name in graph.graph:
-                params[link_name_tos] = {
-                    "ac": tos_to_ac[tos],
-                    "cw_min": int(controls[link_name_tos]["cw"]),
-                    "cw_max": int(controls[link_name_tos]["cw"]),
-                    "aifs": int(controls[link_name_tos]["aifs"]),
-                    "realtek": is_realtek,
-                }
+                if multiple_IC:
+                    params[link_name_tos] = {
+                        "ac": tos_to_ac[tos],
+                        "cw_min": int(controls[link_name_tos]["cw"]),
+                        "cw_max": int(controls[link_name_tos]["cw"]),
+                        "aifs": int(controls[link_name_tos]["aifs"]),
+                        "ind": graph.info_graph[tx_device_name][prot+"_"+tx_device_name+"_"+rx_device_name]["ind"],
+                    }
+                else:
+                    is_realtek = "--realtek" if prot == "wlx" else ""
+                    params[link_name_tos] = {
+                        "ac": tos_to_ac[tos],
+                        "cw_min": int(controls[link_name_tos]["cw"]),
+                        "cw_max": int(controls[link_name_tos]["cw"]),
+                        "aifs": int(controls[link_name_tos]["aifs"]),
+                        "realtek": is_realtek,
+                    }                    
     return params
 
 
@@ -416,6 +457,7 @@ def _set_edca_parameter(conn: Connector, params):
     for link_name_tos in params:
         device_name = link_name_tos.split("_")[2]
         conn.batch(device_name, "modify_edca", params[link_name_tos])
+        print(params[link_name_tos])
         conn.executor.wait(0.1)
     conn.executor.wait(0.1).apply()
     return conn
@@ -682,7 +724,6 @@ def transmission_thread(graph):
     is_stop.clear()
     conn = _transmission_block(graph)
     results = _sum_file_thru(_loop_apply(conn))
-    print(results)
     conn = _calc_rtt(graph)
     print(_rtt_port_associate(graph, _loop_apply(conn)))
     is_stop.set()
@@ -776,6 +817,8 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
             is_network_use.set()
 
             controls, action_idx = wlanController.action_to_control(state)
+            if controls is None:
+                continue
             print(controls)
             print("training_counter", wlanController.training_counter)
             if "fraction" in controls.keys():
@@ -824,7 +867,7 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
                         temp_idx[_device_name][_action].append(control_times)
 
             ## Set edca parameter
-            _set_edca_parameter(conn, edca_params)
+            # _set_edca_parameter(conn, edca_params)
 
         ## plot data
         if dynamic_plotting:
@@ -875,35 +918,52 @@ def start_testing_threading(graph, ctl_prot):
     
 ## Throughput setup
 def init_throughput_measure():
-    _graph, _lists = tc.cw_training_case()
     print("Start Measure")
+    global DURATION, init_thottle
+    _saved_duration = DURATION
+    _saved_throttle = init_thottle
+    DURATION = 10
+    init_thottle = 0
+    port = 6200
+    MCSs = []
+    _graph, _lists = tc.cw_training_case()
     for _file_link in _lists:
-        print(_file_link)
+        _graph, _ = tc.cw_training_case()
+        port += 1
         _graph.ADD_STREAM(
             _file_link,
-            port_number=6200,
+            port_number=port,
             file_name="file_75MB.npy",
             duration=[0, DURATION],
             thru=0,
             tos=96,
             name="File",
         )
-    _setup_ip(_graph)
-    _add_ipc_port(_graph)
-    _set_manifest(_graph)
-    results = transmission_thread(_graph)
+        _setup_ip(_graph)
+        _add_ipc_port(_graph)
+        _set_manifest(_graph)
+        _graph.show()
+        results = transmission_thread(_graph)
+        if results:
+            print("results",results)
+            MCSs.append(results)
+
+
+    DURATION = _saved_duration
+    init_thottle = _saved_throttle
     print("End of measure")
+    return MCSs
 
 ## Iterative training over all the stream
-def iter_all_training_scenario(ind):
+def iter_all_training_scenario(ind, MCSs):
     from itertools import combinations
     global throttle
-
     _, _lists = tc.cw_training_case()
-    for _ind in range(ind, len(_lists)+1):
+    # for _ind in range(len(_lists), ind - 1, -1):
+    for _ind in range(ind,len(_lists)+ 1):
         for _file_link in _lists:
             for comb in combinations(_lists, _ind):
-                _graph, _ = tc.cw_training_case()
+                _graph, _ = tc.cw_training_case(MCSs)
                 _graph.ADD_STREAM(
                     _file_link,
                     port_number=6200,
@@ -920,8 +980,8 @@ def iter_all_training_scenario(ind):
                         port_number=port_id,
                         file_name="proj_6.25MB.npy",
                         duration=[0, DURATION],
-                        thru=6.25,
-                        tos=32,
+                        thru = 7 * 8,
+                        tos= 128,
                         target_rtt=18,
                         name="Proj-%s" % _link,
                     )
@@ -935,6 +995,7 @@ def iter_all_training_scenario(ind):
                     _setup_ip(_graph)
                     _add_ipc_port(_graph)
                     _set_manifest(_graph)
+                    _graph.show()
                     start_testing_threading(_graph, "wlp")
                     plot_thread()
                     is_stop.wait()                                      # wait until all thread stop
@@ -944,7 +1005,7 @@ def iter_all_training_scenario(ind):
                 except Exception as e:
                     print("===== %d-th transmission Error ====="%_ind, e)
                     break
-        
+
     cost_f.close()
 
 
@@ -988,7 +1049,6 @@ def local_training():
             
         
          
-
 def main(args):
     global experiment_name, wlanController
     experiment_name = args.experiment_name
@@ -1000,8 +1060,12 @@ def main(args):
     # wlan - termux wifi ip  ; p2p - Wifi Direct ip
     # wlp - Intel IC wifi ip ; wlx - Realtek IC (rtl8812au) wifi ip
     _ip_extract("wlan\\|p2p\\|wlx\\|wlp", graph)
-    init_throughput_measure()
-    exit()
+
+    MCSs = [400, 400]
+    MCSs = init_throughput_measure()
+    # exit()
+    # graph.show()
+    # exit()
     # _setup_ip(graph)
     # graph.associate_ip("TV", "wlx", "192.168.3.61")
     # _add_ipc_port(graph)
@@ -1025,7 +1089,7 @@ def main(args):
     # _set_manifest(graph)
     # graph.show()
     # exit()
-    iter_all_training_scenario(1)
+    iter_all_training_scenario(1, MCSs)
     # start_testing_threading(graph, "wlp")
     # TODO: fix dynamic plot issue
     # if dynamic_plotting:

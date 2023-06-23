@@ -4,3 +4,4 @@
 [submodule "optimize_v2/wlsops-hack"]
 	path = optimize_v2/wlsops-hack
 	url = https://github.com/QianrenLi/wlsops-hack.git
+	branch = 8812au

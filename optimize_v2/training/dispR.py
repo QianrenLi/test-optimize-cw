@@ -71,7 +71,8 @@ if __name__ == '__main__':
     # cost_path = f"logs/log-cost-2023-06-20-17:47:00.txt"
     # loss_path = f"logs/log-loss-2023-06-20-20:27:05.txt"
     # cost_path = f"logs/log-cost-2023-06-20-20:27:04.txt"
-    loss_path = f"logs/log-loss-2023-06-20-21:05:08.txt"
+    # loss_path = f"logs/log-loss-2023-06-20-21:05:08.txt"
+    loss_path = f"logs/log-loss-2023-06-21-19:26:53.txt"
     cost_path = f"logs/log-cost-2023-06-20-21:05:07.txt"
     dispLoss(loss_path,1)
     dispValue(cost_path, 1, 0.9)
