@@ -229,6 +229,7 @@ class DQNController:
                 state.reshape((1, 1, self.state_size)), dtype=torch.float
             ).to(device)
             actions = self.action_net(state).cpu().clone().detach().numpy()
+            print(actions)
             # print(actions)
             self.action, action_idx = self._extract_action(
                 actions, np.array([self.active_action])

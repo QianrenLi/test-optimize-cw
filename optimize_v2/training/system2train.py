@@ -98,9 +98,9 @@ class wlanDQNController(DQNController):
                         if "file" not in stream["file_name"]:
                             ##
                             if stream["rtt"] < self._rtt_threshold:
-                                state.append(stream["rtt"])
+                                state.append(stream["rtt"] * 1000)
                             else:
-                                state.append(self._rtt_threshold)
+                                state.append(self._rtt_threshold * 1000)
 
                             for _state_name in ["target_rtt"]:
                                 state.append(

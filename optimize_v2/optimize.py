@@ -64,6 +64,7 @@ dynamic_plotting = True
 multiple_IC = False
 is_Intel = False
 is_local_test = False
+is_test = False
 init_thottle = 30
 ## ==================Config parameter================================== ##
 
@@ -865,7 +866,7 @@ def control_thread(graph, time_limit, period, socks):  # create a control_thread
                         temp_idx[_device_name][_action].append(control_times)
 
             ## Set edca parameter
-            # _set_edca_parameter(conn, edca_params)
+            _set_edca_parameter(conn, edca_params)
 
         ## plot data
         if dynamic_plotting:
@@ -909,7 +910,8 @@ def start_testing_threading(graph, ctl_prot):
     )
     training_t = threading.Thread(target=DQN_training_thread)
     tx_thread.start()
-    training_t.start()
+    if not is_test:
+        training_t.start()
     time.sleep(0.5)
     control_t.start()
     # plot_thread()
@@ -920,7 +922,7 @@ def init_throughput_measure():
     global DURATION, init_thottle
     _saved_duration = DURATION
     _saved_throttle = init_thottle
-    DURATION = 10
+    DURATION = 15
     init_thottle = 0
     port = 6200
     MCSs = []
