@@ -11,7 +11,7 @@ class ipc_socket():
 
     def __init__(self, ip_addr, ipc_port, local_port=12345, link_name=""):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.settimeout(10)
+        self.sock.settimeout(0.8)
         self.sock.bind(("0.0.0.0", local_port))
         self.link_name = link_name
         self.ip_addr = ip_addr

@@ -61,7 +61,7 @@ CONTROL_ON = True
 control_times = (DURATION ) / control_period
 experiment_name = "test"
 dynamic_plotting = True
-multiple_IC = True
+multiple_IC = False
 is_Intel = False
 is_local_test = False
 init_thottle = 30
@@ -209,7 +209,7 @@ def _ip_extract(keyword: str, graph: Graph):
         json.dump(ip_table, f)
 
 
-def _setup_ip(graph):
+def _setup_ip(graph:Graph):
     """
     Set up ip stored in graph by the ip_table (requirement to setup the transmission)
     """
@@ -218,8 +218,10 @@ def _setup_ip(graph):
             ip_table = json.load(ip_file)
 
         for device_name in ip_table.keys():
+            _, ind = device_name.split("-")
             for protocol, ip in ip_table[device_name].items():
-                graph.associate_ip(device_name, protocol, ip)
+                graph.info_graph[device_name].update({"ind": int(ind)})
+                graph.associate_ip(device_name, protocol[0:3], ip)                  # default take the previous three as indicator to protocol
     else:
         _add_ind_according_to_interface(graph)
     # graph.show()
@@ -231,25 +233,21 @@ def _add_ind_according_to_interface(_graph:Graph):
     ind_order = {}
     ip_val = {}
     for device_name in ip_table.keys():
-        if is_Intel:
-            ind = 0
-        else:
-            ind = 1
         for protocol, ip in ip_table[device_name].items():
             if is_Intel and "wlp" in protocol:
-                ind_order.update({protocol: ind})
-                ip_val.update({protocol : ip})
-                ind += 1
+                ip_val.update({"wlp" : ip})
+
             elif "wlx" in protocol:
-                ind_order.update({protocol: ind})
-                ip_val.update({protocol : ip})
-                ind += 1
+                ip_val.update({"wlx" : ip})
+
     print(ind_order)
     for device_name in ip_table.keys():    
+        _, ind = device_name.split("-")
         for link in _graph.graph[device_name].keys():
             prot, sender, receiver = link.split("_")
-            _graph.info_graph[device_name][link].update({"ind": ind_order[prot]})
+            _graph.info_graph[device_name][link].update({"ind": int(ind)})
             _graph.associate_ip(device_name, prot, ip_val[prot])
+
 ## ipc communication component
 def _add_ipc_port(graph):
     """
@@ -436,7 +434,7 @@ def _edca_default_params(graph: Graph, controls: dict):
                         "cw_min": int(controls[link_name_tos]["cw"]),
                         "cw_max": int(controls[link_name_tos]["cw"]),
                         "aifs": int(controls[link_name_tos]["aifs"]),
-                        "ind": graph.info_graph[tx_device_name][prot+"_"+tx_device_name+"_"+rx_device_name]["ind"],
+                        "ind": graph.info_graph[tx_device_name]["ind"],
                     }
                 else:
                     is_realtek = "--realtek" if prot == "wlx" else ""
@@ -943,6 +941,7 @@ def init_throughput_measure():
         _add_ipc_port(_graph)
         _set_manifest(_graph)
         _graph.show()
+        # exit()
         results = transmission_thread(_graph)
         if results:
             print("results",results)

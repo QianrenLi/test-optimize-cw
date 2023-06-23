@@ -225,12 +225,12 @@ def cw_training_case(*args):
     else:
         MCSs = [866.7, 866.7]
     graph = Graph()
-    graph.ADD_DEVICE('t1')
-    graph.ADD_DEVICE('t2')
+    graph.ADD_DEVICE('STA-1')
+    graph.ADD_DEVICE('STA-2')
     # graph.ADD_DEVICE('TV')
 
-    link1 = graph.ADD_LINK('t1', '', 'wlx', MCSs[0])
-    link2 = graph.ADD_LINK('t2', '', 'wlx', MCSs[1]) 
+    link1 = graph.ADD_LINK('STA-1', '', 'wlx', MCSs[0])
+    link2 = graph.ADD_LINK('STA-2', '', 'wlx', MCSs[1]) 
     
     # # link4 = graph.ADD_LINK('TV', '', 'wlx', 400)    
     # lists = [link1,link2]

@@ -69,6 +69,7 @@ def conf_wpa_supplicant(if_name:str):
 def start_wpa_supplicant(if_name:str):
     path = "/etc/wpa_supplicant/experiment-%s.conf" % if_name
     cmd = "sudo wpa_supplicant -B -i %s -c %s" % (if_name, path)
+    cmd += "; sudo dhcpcd %s" % if_name
     run_cmd(cmd)
 
 def stop_wpa_supplicant(if_name:str):
@@ -78,7 +79,7 @@ def stop_wpa_supplicant(if_name:str):
 ## config name space
 def create_name_space(namespace:str, phy: str, if_name:str):
     cmd = "sudo ip netns del %s ;" % namespace
-    cmd += "; sudo ip netns add %s ;" % namespace
+    cmd += "sudo ip netns add %s ;" % namespace
     cmd += add_phy_to_namespace(namespace, phy, if_name)
     cmd += "; " + into_name_space(namespace)
     run_cmd(cmd)
@@ -190,7 +191,7 @@ if __name__ == "__main__":
         "--exit", action = "store_true", help  = "Exit config"
     )
     parser.add_argument(
-        "-w, ""--wpa", action="store_true", help = "Start wpa connection" 
+        "-w", "--wpa", action="store_true", help = "Start wpa connection" 
     )
     parser.add_argument(
         "-l", "--lines", type= int, help="lines required to be removed"
